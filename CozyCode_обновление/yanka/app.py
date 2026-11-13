@@ -17,6 +17,8 @@ from .router import EXECUTORS, Router, explain
 from .store import TEMPLATES
 from .tasks import Tasks, make_verify, plan
 from . import vision, voice
+from .pulse import MODULE_RU, Pulse
+from .team import LIMITS, ROLES, Team
 
 PERSONA = ("Ты — Янка 🐑, тёплая и заботливая помощница Яны в приложении CozyCode на её ПК. "
            "Отвечай по-русски, тепло, коротко и по делу, иногда с лёгкими эмодзи (🐑✨💕). "
@@ -25,7 +27,7 @@ PERSONA = ("Ты — Янка 🐑, тёплая и заботливая пом�
            "Если Яна спрашивает про файлы, сама вызови инструмент list_dir или read_file — не проси её вводить команды. "
            "Менять файлы ты не можешь (только смотреть).")
 CHAT_TOOLS = ("get_info", "list_dir", "read_file", "search_files")
-TAGS = ("@пк", "@local", "@облако", "@cloud", "@gemini", "@гугл", "@google", "@blender", "@блендер", "@roblox", "@роблокс")
+TAGS = ("@команда", "@team", "@пк", "@local", "@облако", "@cloud", "@gemini", "@гугл", "@google", "@blender", "@блендер", "@roblox", "@роблокс")
 PROGRAM_PERSONA = ("\n\nСейчас ты работаешь прямо в программе «{name}» через её инструменты. Делай то, что просит Яна, "
                    "маленькими шагами: сначала посмотри (инструменты get_/list_/info), потом действуй. "
                    "Не больше 6 действий. В конце коротко расскажи, что сделала. Если инструмент вернул ошибку — "
@@ -66,6 +68,16 @@ class YankaService:
         self.hooks = {"to_klodik": None, "post": None}
         self._running = {}  # task_id -> threading.Event (стоп)
         self.listener = voice.Listener(log)
+        # задание 2: «пульс» видит каждый вызов модели и инструмента
+        self.pulse = Pulse(data_dir)
+        self.hub.chat = self.pulse.wrap(
+            "model", lambda pid, *a, **k: f"{pid}: {k.get('reason') or 'запрос'}", self.hub.chat,
+            extra_of=lambda r: {"model": r.get("model"), "tokens": (r.get("in") or 0) + (r.get("out") or 0),
+                                "usd": r.get("usd", 0)})
+        self.gate.call = self.pulse.wrap(
+            "tool", lambda name, args=None, **k: (f"{name}: {(args or {}).get('tool')}" if name == "mcp_call" else name),
+            self.gate.call, who="Янка")
+        self.team = Team(self.hub, self.tasks, self.pulse, log)
         self._import_keys(Path(data_dir) / "import_keys.json")
 
     # ---------- маршрут ----------
@@ -319,6 +331,29 @@ class YankaService:
 
         threading.Thread(target=go, daemon=True).start()
 
+    # ---------- команда агентов (задание 2) ----------
+    def team_chat(self, pid, text):
+        """@команда …: план → сообщение с планом → выполнение → итог в чат."""
+        post = self.hooks.get("post") or (lambda p, s: None)
+        goal = _strip_tag(text)
+        try:
+            model = self._model()
+            t = self.team.plan(goal, model)
+            t["project"] = pid
+            self.tasks.save()
+        except Exception as e:
+            post(pid, f"👥 Команда не собралась: {e}")
+            return
+        lines = "\n".join(f"{s['n']}. {ROLES[s['role']]['emoji']} **{ROLES[s['role']]['name']}** — {s['text']}"
+                          + (f" _(после {', '.join(map(str, s['deps']))})_" if s.get("deps") else "")
+                          + (f" · проверяет {ROLES[s['review']]['emoji']}" if s.get("review") else "")
+                          for s in t["steps"])
+        post(pid, f"👥 Собрала команду для «{t['title'][2:]}».\n\n**Техзадание**\n{t.get('spec', '')[:1500]}\n\n"
+                  f"**План**\n{lines}\n\nРаботаем! Следить можно в «🐑 Янка → 🫀 Пульс», остановить — в «📋 Задачи».")
+        self.team.run(t["id"], model, on_done=lambda tt: post(
+            pid, f"👥 **Итог команды** ({self.tasks.progress(tt)}, {tt.get('seconds', 0):.0f} с, {tt.get('tokens', 0)} токенов)\n\n"
+                 + (tt.get("summary") or "")))
+
     # ---------- состояние для окна ----------
     def local_report(self, refresh=False):
         if refresh or time.time() - self._local_cache["t"] > 60:
@@ -335,12 +370,38 @@ class YankaService:
             "local": self.local_report(), "executors": EXECUTORS, "memory_kinds": KINDS,
             "memory_count": len(self.memory.list(limit=10000)),
             "tasks": [{"id": t["id"], "title": t["title"], "status": t["status"], "progress": self.tasks.progress(t),
-                       "updated": t["updated"], "running": t["id"] in self._running,
-                       "steps": [{"n": s["n"], "text": s["text"], "executor": s["executor"], "status": s["status"],
+                       "updated": t["updated"], "running": t["id"] in self._running or t["id"] in self.team.running,
+                       "steps": [{"n": s["n"], "text": s["text"], "executor": s["executor"], "status": s["status"], "role": s.get("role"),
                                   "result": s["result"][:600], "error": s["error"][:200]} for s in t["steps"]]}
                       for t in self.tasks.list()[:30]],
             "templates": {k: v["name"] for k, v in TEMPLATES.items() if not v.get("local")},
             "journal": self.gate.journal(40)[::-1], "last": self.last.get(pid) if pid else None,
+            "team_roles": ROLES,
+        }
+
+    def pulse_state(self, confirms=None):
+        snap = self.pulse.snapshot(40)
+        st = self.hub.status()
+        tasks = self.tasks.list()
+        try:
+            res = local.resources()
+        except Exception:
+            res = {}
+        lm = (self.local_report() or {}).get("lmstudio", {})
+        return {
+            "active": snap["active"], "recent": snap["recent"], "agents": self.team.live(),
+            "tasks_running": [{"id": t["id"], "title": t["title"], "progress": self.tasks.progress(t)}
+                              for t in tasks if t["status"] in ("running", "waiting") or t["id"] in self._running
+                              or t["id"] in self.team.running],
+            "tasks_done": [{"id": t["id"], "title": t["title"], "updated": t["updated"]}
+                           for t in tasks if t["status"] == "done"][:8],
+            "models": {"loaded": lm.get("loaded") or [], "server": lm.get("server"),
+                       "used": sorted({r.get("model") for r in snap["recent"] if r.get("module") == "model" and r.get("model")})},
+            "tools": [r for r in snap["recent"] if r.get("module") == "tool"][:8],
+            "confirms": confirms or [], "resources": res, "spent": st["spent"],
+            "errors": [r for r in snap["recent"] if not r.get("ok")][:8],
+            "stats": self.pulse.stats(24)[:12], "insights": self.pulse.insights(24),
+            "modules": MODULE_RU, "limits": LIMITS,
         }
 
     def action(self, path, body):
@@ -409,13 +470,21 @@ class YankaService:
             t = self.task_plan(goal, body.get("project") or "general")
             return {"id": t["id"], "steps": len(t["steps"])}
         if path == "task/run":
-            self.task_run(body["id"])
+            t = self.tasks.get(body["id"])
+            if t and t.get("kind") == "team":
+                post = self.hooks.get("post") or (lambda p, s: None)
+                self.team.run(t["id"], self._model(), on_done=lambda tt: post(tt["project"], "👥 **Итог команды**\n\n" + (tt.get("summary") or "")))
+            else:
+                self.task_run(body["id"])
             return {"ok": True}
         if path == "task/stop":
             ev = self._running.get(body["id"])
             if ev:
                 ev.set()
-            return {"ok": bool(ev)}
+            return {"ok": bool(ev) or self.team.stop(body["id"])}
+        if path == "rate":
+            return {"ok": bool(self.pulse.rate(body.get("id", ""), bool(body.get("good")), body.get("model", ""),
+                                               body.get("kind", ""), body.get("text", "")))}
         if path == "task/done":  # Яна: Клодик сделал ожидающий шаг
             self.tasks.resume(body["id"], body.get("result") or "сделано")
             self.task_run(body["id"])

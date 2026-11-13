@@ -1355,6 +1355,11 @@ def api_post(path, body, raw=None, query=None):
                 decision = YANKA.route_message(text, CFG.get("yanka_mode", "auto"), images=images)
             except Exception as e:
                 log(f"Янка: маршрут не получился ({e})")
+        if decision and decision["executor"] == "team":
+            msg = append_message(pid, {"role": "user", "text": text, "files": files, "to": "yanka"})
+            bump("sent", project=pid)
+            threading.Thread(target=YANKA.team_chat, args=(pid, text), daemon=True).start()
+            return {"ok": True, "message": msg, "yanka": True}
         if decision and decision["executor"] in ("local", "cloud", "blender", "roblox"):
             history = read_messages(pid, 20)
             msg = append_message(pid, {"role": "user", "text": text, "files": files, "to": "yanka"})
@@ -1479,6 +1484,10 @@ def api_post(path, body, raw=None, query=None):
         if not YANKA:
             raise ValueError("Янка не запустилась - посмотри data/cozycode.log")
         what = path[len("/api/yanka/"):]
+        if what == "pulse":
+            with LOCK:
+                confirms = [{"title": c.get("title"), "message": (c.get("message") or "")[:160]} for c in STATE["confirms"].values()]
+            return YANKA.pulse_state(confirms)
         if what == "screen":
             return yanka_screen(body.get("project") or "general", (body.get("text") or "").strip())
         if what == "state":

@@ -15,12 +15,12 @@ import sys
 
 EXECUTORS = {
     "local": "🐑 Янка на ПК", "cloud": "☁️ облачная модель", "klodik": "✨ Клодик",
-    "blender": "🧊 Blender", "roblox": "🎮 Roblox Studio",
+    "blender": "🧊 Blender", "roblox": "🎮 Roblox Studio", "team": "👥 команда агентов",
 }
 
 MANUAL = {"@пк": "local", "@local": "local", "@облако": "cloud", "@cloud": "cloud", "@клодик": "klodik",
           "@klodik": "klodik", "@blender": "blender", "@блендер": "blender", "@roblox": "roblox", "@роблокс": "roblox",
-          "@gemini": "cloud", "@гугл": "cloud", "@google": "cloud"}
+          "@gemini": "cloud", "@гугл": "cloud", "@google": "cloud", "@команда": "team", "@team": "team"}
 
 # (тип задачи, слова-признаки). Порядок важен: более узкое - выше.
 RULES = [
@@ -134,6 +134,8 @@ class Router:
         if want == "cloud" and (not cloud or (private and not self.hub.store.cfg.get("cloud_private_ok"))):
             reason = "облачные модели выключены" if not cloud else "тут твои личные данные, в облако без разрешения не отправляю"
             d.update(executor="local" if local_ok else "klodik", fallback_from="cloud", reason=reason)
+        elif want == "team" and not local_ok:
+            d.update(executor="klodik", fallback_from="team", reason="команде нужна модель на ПК, а LM Studio не запущен - передаю Клодику")
         elif want in ("blender", "roblox") and not local_ok:
             d.update(executor="klodik", fallback_from=want, reason="LM Studio не запущен - с программой поможет Клодик")
         elif want in ("blender", "roblox") and programs and want not in programs:
@@ -144,7 +146,7 @@ class Router:
             else:
                 d.update(executor="klodik", fallback_from="local", reason="LM Studio не запущен - передаю Клодику")
 
-        if d["executor"] in ("local", "blender", "roblox"):  # в программах Янка работает той же моделью на ПК
+        if d["executor"] in ("local", "blender", "roblox", "team"):  # в программах Янка работает той же моделью на ПК
             role = "code" if kind == "code" else ("fast" if cx < 0.15 and self.roles.get("fast") else "chat")
             d.update(provider="lmstudio", model=self.roles.get(role) or self.hub.store.provider("lmstudio").get("model"))
         elif d["executor"] == "cloud":

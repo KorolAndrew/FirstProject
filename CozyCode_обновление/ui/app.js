@@ -209,7 +209,9 @@
           : yn ? `<div class="ava yn-ava">${window.Yanochka ? Yanochka.svg : "🐑"}</div>` : '<div class="ava">К</div>';
         const body = m.role === "user" ? "<p>" + inline(m.text).replace(/\n/g, "<br>") + "</p>" : md(m.text);
         const who = m.role === "user" ? "Яна" + (m.to === "yanka" ? " → Янке" : m.route ? " → Клодику" : "") : yn ? "Янка" : "Клодик";
-        const why = yn && m.meta ? `<div class="why" title="${esc(m.meta.why || "")}">🧠 ${esc(m.meta.model || "")}${m.meta.tools && m.meta.tools.length ? " · 🔧 " + esc(m.meta.tools.join(", ")) : ""} · ${esc(String(m.meta.seconds || 0))} с · бесплатно, на ПК</div>` : "";
+        const rated = (JSON.parse(localStorage.getItem("cozy-rated") || "{}"))[m.id];
+        const rate = yn ? `<button class="rate${rated === 1 ? " on" : ""}" data-rate="1" data-mid="${esc(m.id)}" title="Хороший ответ">👍</button><button class="rate${rated === 0 ? " on" : ""}" data-rate="0" data-mid="${esc(m.id)}" title="Плохой ответ - Янка учтёт в самоанализе">👎</button>` : "";
+        const why = yn && m.meta ? `<div class="why" title="${esc(m.meta.why || "")}">🧠 ${esc(m.meta.model || "")}${m.meta.tools && m.meta.tools.length ? " · 🔧 " + esc(m.meta.tools.join(", ")) : ""} · ${esc(String(m.meta.seconds || 0))} с · ${m.meta.cloud ? "☁️ облако" : "бесплатно, на ПК"}${rate}</div>` : (yn ? `<div class="why">${rate}</div>` : "");
         const route = m.role === "user" && m.route ? `<div class="why">🧭 ${esc(m.route)}</div>` : "";
         return `<div class="msg ${m.role}">${ava}<div><div class="body">${body}${files}</div><div class="meta">${who} · ${fmtTime(m.time)}</div>${why}${route}</div></div>`;
       }).join("") + confirms.map((c) => c.kind === "question" ? questionHtml(c) : `
@@ -809,6 +811,42 @@
     catch (e) { toast(e.message, 6000); ta.value = text; }
   };
 
+  // ---------- задание 2: оценки ответов ----------
+  $("messages").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-rate]"); if (!b) return;
+    const good = b.dataset.rate === "1", mid = b.dataset.mid;
+    const rated = JSON.parse(localStorage.getItem("cozy-rated") || "{}"); rated[mid] = good ? 1 : 0;
+    localStorage.setItem("cozy-rated", JSON.stringify(rated));
+    const body = b.closest(".msg").querySelector(".body").innerText.slice(0, 200);
+    const model = (b.closest(".why").innerText.match(/🧠 (\S+)/) || [])[1] || "";
+    try { await api("/api/yanka/rate", {id: mid, good, model, text: body}); toast(good ? "Спасибо! 💕" : "Запомнила - постараюсь лучше 🙈"); } catch (er) { toast(er.message); }
+    b.parentElement.querySelectorAll(".rate").forEach((x) => x.classList.toggle("on", x === b));
+  });
+
+  // ---------- задание 2: 🫀 Пульс ----------
+  const P = {t: null};
+  function ago(sec) { return sec < 60 ? Math.round(sec) + " с" : Math.round(sec / 60) + " мин"; }
+  async function pLoad() {
+    clearTimeout(P.t);
+    if ($("m-yanka").classList.contains("hidden") || $("y-pulse").classList.contains("hidden")) return;
+    let s; try { s = await api("/api/yanka/pulse", {}); } catch (e) { $("p-active").innerHTML = `<div class="hint">⚠️ ${esc(e.message)}</div>`; return; }
+    const M = s.modules || {}, none = (t) => `<div class="hint">${t}</div>`;
+    $("p-active").innerHTML = s.active.map((a) => `<div class="row2"><span>${esc((M[a.module] || a.module).split(" ")[0])}</span><span class="grow">${esc(a.who)}: ${esc(a.action)}</span><span class="hint">${ago(a.sec)}</span></div>`).join("") || none("Янка отдыхает 💤");
+    $("p-agents").innerHTML = s.agents.map((a) => `<div class="row2"><span>${esc(a.emoji)}</span><span class="grow"><b>${esc(a.name)}</b> - ${esc(a.state)}<div class="hint">${esc(a.text)}</div></span><span class="hint">${ago(a.sec)}</span></div>`).join("") || none("Команда не работает");
+    $("p-confirms").innerHTML = s.confirms.map((c) => `<div><b>${esc(c.title || "")}</b><div class="hint">${esc(c.message)}</div></div>`).join("") || none("Ничего не ждёт ✅");
+    $("p-tasks").innerHTML = (s.tasks_running.map((t) => `<div class="row2"><span>⚙️</span><span class="grow">${esc(t.title)}</span><span class="hint">${esc(t.progress)}</span></div>`).join("")
+      + s.tasks_done.slice(0, 4).map((t) => `<div class="row2"><span>✅</span><span class="grow">${esc(t.title)}</span></div>`).join("")) || none("Задач нет");
+    $("p-models").innerHTML = `<div>LM Studio: ${s.models.server ? "🟢 работает" : "⚪ выключен"}</div>` + (s.models.loaded.length ? `<div class="hint">в видеокарте: ${esc(s.models.loaded.join(", "))}</div>` : "")
+      + (s.models.used.length ? `<div class="hint">отвечали: ${esc(s.models.used.join(", "))}</div>` : "") + `<div class="hint">облако за месяц: $${(s.spent.month || 0).toFixed(4)}</div>`;
+    const R = s.resources || {};
+    $("p-res").innerHTML = `<div>🎮 ${esc(R.gpu || "видеокарта ?")}</div><div class="hint">видеопамять свободна: ${R.vram_free_gb ?? "?"} из ${R.vram_gb ?? "?"} ГБ</div><div class="hint">память свободна: ${R.ram_free_gb ?? "?"} из ${R.ram_gb ?? "?"} ГБ</div>`;
+    $("p-recent").innerHTML = s.recent.slice(0, 14).map((r) => `<div class="row2"><span>${r.ok ? "✅" : "❌"}</span><span class="hint">${esc((r.t || "").slice(11, 16))}</span><span>${esc((M[r.module] || r.module).split(" ")[0])}</span><span class="grow">${esc(r.who)}: ${esc(r.action)}${r.model ? " · " + esc(r.model) : ""}${r.error ? ` <span class="lv-err">${esc(r.error.slice(0, 120))}</span>` : ""}</span><span class="hint">${r.sec} с</span></div>`).join("") || none("Пока пусто");
+    const LV = {ok: "💚", warn: "🟡", err: "🔴"};
+    $("p-insights").innerHTML = s.insights.map((i) => `<div class="lv-${i.level}">${LV[i.level] || ""} ${esc(i.text)}${i.idea ? `<div class="hint">💡 ${esc(i.idea)}</div>` : ""}</div>`).join("");
+    $("p-stats").innerHTML = s.stats.map((x) => `<div class="row2"><span>${esc((M[x.module] || x.module).split(" ")[0])}</span><span class="grow">${esc(x.action)}</span><span class="hint">${x.calls}× · ср ${x.avg} с · 95% ${x.p95} с${x.errors ? " · ❌" + x.errors : ""}</span></div>`).join("") || none("Пока нет данных");
+    P.t = setTimeout(pLoad, 2000);
+  }
+
   // ---------- 1.3.0: Янка ----------
   const whoSel = $("who");
   whoSel.onchange = async () => {
@@ -825,9 +863,10 @@
     document.querySelectorAll(".ytab").forEach((x) => x.classList.toggle("on", x === t));
     document.querySelectorAll(".ypane").forEach((p) => p.classList.toggle("hidden", p.id !== t.dataset.y));
     if (t.dataset.y === "y-memory") yMemory();
+    if (t.dataset.y === "y-pulse") pLoad();
     if (t.dataset.y === "y-voice") { vFill(); vStatus(); }
   }));
-  $("btn-yanka").onclick = async () => { $("m-yanka").classList.remove("hidden"); await yLoad(); };
+  $("btn-yanka").onclick = async () => { $("m-yanka").classList.remove("hidden"); await yLoad(); pLoad(); };
   async function yLoad() {
     try { Y.state = await yapi("state", {project: current}); } catch (e) { toast(e.message); return; }
     const st = Y.state, L = st.local || {}, R = L.resources || {}, lm = L.lmstudio || {};
@@ -852,7 +891,7 @@
     $("y-tlist").innerHTML = st.tasks.map((t) => `<div class="item" style="display:block"><div class="row"><div class="grow"><b>${esc(t.title)}</b><div class="hint">${esc(TS[t.status] || t.status)} · ${esc(t.progress)} · ${esc(t.updated.slice(0, 16).replace("T", " "))}</div></div>
         ${t.running ? `<button class="btn ghost small" data-ytstop="${esc(t.id)}">⏹ Стоп</button>` : t.status === "waiting" ? `<button class="btn small" data-ytdone="${esc(t.id)}">✅ Готово</button>` : t.status !== "done" ? `<button class="btn small" data-ytrun="${esc(t.id)}">▶️ ${t.status === "pending" && t.progress.startsWith("0/") ? "Выполнить" : "Продолжить"}</button>` : ""}
         <button class="btn ghost small" data-ytdel="${esc(t.id)}">🗑️</button></div>
-        <ol class="steps">${t.steps.map((s) => `<li><span class="tag">${esc(TS[s.status] || s.status)}</span> ${esc(s.text)} <span class="hint">· ${esc(EX[s.executor] || s.executor)}</span>${s.result ? `<details><summary class="hint">результат</summary><div class="hint">${esc(s.result)}</div></details>` : ""}${s.error ? `<div class="hint">⚠️ ${esc(s.error)}</div>` : ""}</li>`).join("")}</ol></div>`).join("") || '<div class="hint">Задач пока нет.</div>';
+        <ol class="steps">${t.steps.map((s) => `<li><span class="tag">${esc(TS[s.status] || s.status)}</span> ${s.role && st.team_roles[s.role] ? esc(st.team_roles[s.role].emoji + " " + st.team_roles[s.role].name) + ": " : ""}${esc(s.text)} <span class="hint">· ${s.role ? "команда" : esc(EX[s.executor] || s.executor)}</span>${s.result ? `<details><summary class="hint">результат</summary><div class="hint">${esc(s.result)}</div></details>` : ""}${s.error ? `<div class="hint">⚠️ ${esc(s.error)}</div>` : ""}</li>`).join("")}</ol></div>`).join("") || '<div class="hint">Задач пока нет.</div>';
     clearTimeout(Y.t); if (st.tasks.some((t) => t.running) && !$("m-yanka").classList.contains("hidden")) Y.t = setTimeout(yLoad, 3000);
     const D = {allowed: "✅ можно", approved: "✅ Яна разрешила", rejected: "🚫 Яна отказала", denied: "⛔ запрещено"};
     $("y-jlist").innerHTML = st.journal.map((j) => `<div class="item"><div class="grow"><b>${esc(D[j.decision] || j.decision)}</b> · ${esc(j.brief || j.tool)}<div class="hint">${esc((j.t || "").slice(0, 16).replace("T", " "))} · ${esc(j.who || "")} · ${esc(j.kind || "")}${j.why ? " · " + esc(j.why) : ""}</div></div>${(j.backups || []).length ? `<button class="btn ghost small" data-yundo="${esc(j.id)}">↩️ Вернуть</button>` : ""}</div>`).join("") || '<div class="hint">Янка ещё ничего не делала на ПК.</div>';
@@ -883,6 +922,12 @@
     const day = +$("y-bday").value || 0, month = +$("y-bmonth").value || 0;
     if ((day > 0 || month > 0) && !confirm(`Разрешить Янке тратить до $${day} в день и $${month} в месяц на облачные модели?`)) return;
     try { await yapi("budget", {daily_usd: day, monthly_usd: month}); toast("Лимит сохранён"); yLoad(); } catch (e) { toast(e.message); }
+  };
+  $("y-tteam").onclick = async () => {
+    const goal = $("y-tgoal").value.trim(); if (!goal) return toast("Опиши задачу для команды");
+    $("y-tgoal").value = ""; toast("👥 Янка собирает команду… план появится в чате");
+    try { await api("/api/send", {project: current, text: "@команда " + goal, files: []}); await loadMessages(true); }
+    catch (e) { toast(e.message); }
   };
   $("y-tplan").onclick = async () => {
     const goal = $("y-tgoal").value.trim(); if (!goal) return;

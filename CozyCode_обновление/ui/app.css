@@ -105,6 +105,13 @@ button,input,textarea,select{font:inherit;color:inherit}
 .live .rec{width:10px;height:10px;border-radius:50%;background:var(--rd);animation:recblink 1s infinite}
 @keyframes recblink{50%{opacity:.25}}
 #btn-mic.on{background:#3a2228;border-color:var(--rd)}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pcard{background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:8px 10px;min-height:70px}
+.pcard.wide{grid-column:span 3}.pcard h4{margin:0 0 6px;font-size:13px}
+.plist{display:flex;flex-direction:column;gap:3px;font-size:12.5px}.plist .hint{font-size:12px}
+.plist .row2{display:flex;gap:6px;align-items:baseline}.plist .row2 .grow{min-width:0;overflow-wrap:anywhere}
+.lv-ok{color:var(--gr)}.lv-warn{color:var(--gd)}.lv-err{color:var(--rd)}
+.rate{margin-left:6px;opacity:.55;cursor:pointer;background:none;border:0;padding:0 2px;font-size:13px}.rate:hover,.rate.on{opacity:1}
 .who{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:6px 4px;color:var(--tx);max-width:118px}
 .msg .ava.yn-ava{background:#fffaf3;border:2px solid var(--pk);overflow:hidden;padding:0}.msg .ava.yn-ava svg{width:100%;height:100%;transform:scale(1.5) translateY(6%)}
 .msg .why{color:var(--mu);font-size:11.5px;margin-top:2px}

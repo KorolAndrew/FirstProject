@@ -141,7 +141,7 @@
       <h3>1. Проверь, что CozyCode и туннель работают</h3>
       <ol>
         <li>CozyCode запущен, внизу слева точка моста зелёная.</li>
-        <li>Вкладка «Подключение»: туннель <b>ngrok</b>, адрес <code><твой-адрес>.ngrok-free.dev</code>.</li>
+        <li>Вкладка «Подключение»: туннель <b>ngrok</b>, адрес <code>handwrite-portly-chirping.ngrok-free.dev</code>.</li>
         <li>Если ngrok тоже новый (другой аккаунт ngrok): на dashboard.ngrok.com возьми <b>Authtoken</b> (длинный, НЕ тот, что начинается с <code>rd_</code>) и выполни в PowerShell в папке CozyCode: <code>.\ngrok config add-authtoken ТВОЙ_ТОКЕН</code>. Затем в Domains скопируй бесплатный адрес, впиши его сюда и перезапусти CozyCode.</li>
       </ol>
 
@@ -257,13 +257,28 @@
   <div class="card wide">
     <h2>🐑 Янка <small class="hint" id="y-sub"></small></h2>
     <div class="ytabs">
-      <button class="ytab on" data-y="y-models">🧠 Модели</button>
+      <button class="ytab on" data-y="y-pulse">🫀 Пульс</button>
+      <button class="ytab" data-y="y-models">🧠 Модели</button>
       <button class="ytab" data-y="y-memory">💜 Память</button>
       <button class="ytab" data-y="y-tasks">📋 Задачи</button>
       <button class="ytab" data-y="y-journal">🛡️ Разрешения</button>
       <button class="ytab" data-y="y-voice">🎙️ Голос</button>
     </div>
-    <section id="y-models" class="ypane">
+    <section id="y-pulse" class="ypane">
+      <div class="pgrid">
+        <div class="pcard"><h4>⚙️ Сейчас</h4><div id="p-active" class="plist"></div></div>
+        <div class="pcard"><h4>👥 Агенты</h4><div id="p-agents" class="plist"></div></div>
+        <div class="pcard"><h4>🔔 Ждут твоего ответа</h4><div id="p-confirms" class="plist"></div></div>
+        <div class="pcard"><h4>📋 Задачи</h4><div id="p-tasks" class="plist"></div></div>
+        <div class="pcard"><h4>🧠 Модели</h4><div id="p-models" class="plist"></div></div>
+        <div class="pcard"><h4>🖥️ Ресурсы</h4><div id="p-res" class="plist"></div></div>
+        <div class="pcard wide"><h4>🔧 Последние действия</h4><div id="p-recent" class="plist"></div></div>
+        <div class="pcard wide"><h4>💡 Самоанализ (за сутки)</h4><div id="p-insights" class="plist"></div>
+          <details><summary class="hint">Скорость модулей</summary><div id="p-stats" class="plist"></div></details></div>
+      </div>
+      <p class="hint">Здесь видно всё, что делает Янка: ничего скрытого. Самоанализ только подсказывает — свой код и защиту Янка сама не меняет.</p>
+    </section>
+    <section id="y-models" class="ypane hidden">
       <div class="ybox" id="y-res"></div>
       <h3>Модели на ПК (LM Studio)</h3>
       <div class="list" id="y-local"></div>
@@ -281,7 +296,7 @@
       <p class="hint">Янка сама выписывает важное из разговоров (предпочтения, решения, проблемы). Пароли и ключи не запоминает никогда.</p>
     </section>
     <section id="y-tasks" class="ypane hidden">
-      <div class="row"><input id="y-tgoal" placeholder="Большая задача… (например: «придумай и распиши план уютной комнаты для Roblox»)"><button class="btn small" id="y-tplan">🧠 Составить план</button></div>
+      <div class="row"><input id="y-tgoal" placeholder="Большая задача… (например: «придумай и распиши план уютной комнаты для Roblox»)"><button class="btn small" id="y-tplan">🧠 Составить план</button><button class="btn small" id="y-tteam" title="Янка соберёт команду специалистов: архитектор, разработчик, тестировщик и др.">👥 Командой</button></div>
       <p class="hint">Янка разобьёт задачу на шаги, сделает свои, проверит результат и повторит, если не вышло. Шаги про код, файлы, Blender и Roblox уйдут Клодику - когда он сделает, нажми «✅ Готово».</p>
       <div class="list" id="y-tlist"></div>
     </section>

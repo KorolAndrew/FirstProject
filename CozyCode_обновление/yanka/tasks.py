@@ -52,13 +52,13 @@ class Tasks:
 
     # --- создание ---
     def create(self, goal, steps, project="general", title=None):
-        """steps: [{"text", "executor"?, "check"?}] или просто строки."""
+        """steps: [{"text", "executor"?, "check"?, "role"?, "review"?, "deps"?}] или просто строки."""
         norm = []
         for i, s in enumerate(steps, 1):
             s = {"text": s} if isinstance(s, str) else dict(s)
             norm.append({"n": i, "text": str(s.get("text", ""))[:500], "executor": s.get("executor", "local"),
                          "check": s.get("check"), "status": "pending", "result": "", "attempts": 0,
-                         "error": ""})
+                         "error": "", **{k: s[k] for k in ("role", "review", "deps") if k in s}})
         t = {"id": uuid.uuid4().hex[:8], "title": (title or goal)[:80], "goal": goal, "project": project,
              "status": "pending", "steps": norm, "created": now(), "updated": now(), "log": []}
         self._log(t, f"план из {len(norm)} шагов")
