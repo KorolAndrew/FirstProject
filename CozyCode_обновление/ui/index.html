@@ -50,6 +50,7 @@
     <div class="banner moonbar hidden" id="moonbar">🌙 Клодик закончил. ПК выключится через <b id="moon-left">60</b> с <button class="btn small" id="moon-cancel">Отмена</button></div>
     <div class="messages" id="messages"></div>
     <div class="composer">
+      <div class="live hidden" id="live"><span class="rec"></span><span id="live-text">Слушаю…</span><button class="btn ghost small" id="live-stop">⏹</button></div>
       <div class="work hidden" id="work"><span class="dots"><i></i><i></i><i></i></span><span id="work-text"></span></div>
       <div class="chips" id="chips"></div>
       <div class="input">
@@ -59,7 +60,9 @@
           <option value="off">✨ Клодик</option>
         </select>
         <button class="btn ghost icon moon" id="btn-moon" title="Выключить ПК, когда Клодик закончит (через минуту, можно отменить)">🌙</button>
-        <button class="btn ghost icon" id="btn-attach" title="Прикрепить файл">📎</button>
+        <button class="btn ghost icon" id="btn-attach" title="Прикрепить файл (картинку Янка посмотрит сама)">📎</button>
+        <button class="btn ghost icon" id="btn-screen" title="Показать Янке экран (один снимок, только по нажатию)">📸</button>
+        <button class="btn ghost icon" id="btn-mic" title="Сказать голосом (Янка слушает, пока ты говоришь)">🎙️</button>
         <input type="file" id="file" multiple hidden>
         <textarea id="text" rows="1" placeholder="Напиши Клодику…  (Enter - отправить, Shift+Enter - новая строка)"></textarea>
         <button class="btn send" id="btn-send" title="Отправить"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
@@ -258,6 +261,7 @@
       <button class="ytab" data-y="y-memory">💜 Память</button>
       <button class="ytab" data-y="y-tasks">📋 Задачи</button>
       <button class="ytab" data-y="y-journal">🛡️ Разрешения</button>
+      <button class="ytab" data-y="y-voice">🎙️ Голос</button>
     </div>
     <section id="y-models" class="ypane">
       <div class="ybox" id="y-res"></div>
@@ -280,6 +284,17 @@
       <div class="row"><input id="y-tgoal" placeholder="Большая задача… (например: «придумай и распиши план уютной комнаты для Roblox»)"><button class="btn small" id="y-tplan">🧠 Составить план</button></div>
       <p class="hint">Янка разобьёт задачу на шаги, сделает свои, проверит результат и повторит, если не вышло. Шаги про код, файлы, Blender и Roblox уйдут Клодику - когда он сделает, нажми «✅ Готово».</p>
       <div class="list" id="y-tlist"></div>
+    </section>
+    <section id="y-voice" class="ypane hidden">
+      <div class="ybox" id="v-status">Проверяю…</div>
+      <label class="check"><input type="checkbox" id="v-speak"> Янка отвечает голосом</label>
+      <label class="check"><input type="checkbox" id="v-notify"> Озвучивать уведомления («Клодик закончил», вопросы)</label>
+      <label class="check"><input type="checkbox" id="v-autosend"> Отправлять сразу, как я договорила</label>
+      <label>Голос<select id="v-voice"></select></label>
+      <label>Скорость <input type="range" id="v-rate" min="0.6" max="1.6" step="0.1"> <span id="v-rate-n"></span></label>
+      <label>Высота <input type="range" id="v-pitch" min="0.6" max="1.6" step="0.1"> <span id="v-pitch-n"></span></label>
+      <div class="row"><button class="btn ghost small" id="v-test">🔊 Послушать</button><button class="btn ghost small" id="v-hush">⏹ Замолчать</button></div>
+      <p class="hint">Всё работает на ПК без интернета: слух - Vosk, голос - голоса Windows. 🎙️ у поля ввода - сказать голосом (замолкает Янка тоже по нему), 📸 - показать Янке экран.</p>
     </section>
     <section id="y-journal" class="ypane hidden">
       <p class="hint">Что Янка делала на ПК и кто разрешил. Чтение - сразу; изменения - с резервной копией (можно вернуть); установка программ - только с твоего «да»; настройки Windows - запрещены.</p>

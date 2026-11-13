@@ -5,6 +5,7 @@ cozycode.py вызывает только YankaService: route_message(), answer(
 через Gate - менять файлы и запускать команды в чате Янка пока не может.
 """
 import json
+from pathlib import Path
 import threading
 import time
 
@@ -15,6 +16,7 @@ from .providers import Hub, ProviderError
 from .router import EXECUTORS, Router, explain
 from .store import TEMPLATES
 from .tasks import Tasks, make_verify, plan
+from . import vision, voice
 
 PERSONA = ("Ты — Янка 🐑, тёплая и заботливая помощница Яны в приложении CozyCode на её ПК. "
            "Отвечай по-русски, тепло, коротко и по делу, иногда с лёгкими эмодзи (🐑✨💕). "
@@ -23,6 +25,24 @@ PERSONA = ("Ты — Янка 🐑, тёплая и заботливая пом�
            "Если Яна спрашивает про файлы, сама вызови инструмент list_dir или read_file — не проси её вводить команды. "
            "Менять файлы ты не можешь (только смотреть).")
 CHAT_TOOLS = ("get_info", "list_dir", "read_file", "search_files")
+TAGS = ("@пк", "@local", "@облако", "@cloud", "@gemini", "@гугл", "@google", "@blender", "@блендер", "@roblox", "@роблокс")
+PROGRAM_PERSONA = ("\n\nСейчас ты работаешь прямо в программе «{name}» через её инструменты. Делай то, что просит Яна, "
+                   "маленькими шагами: сначала посмотри (инструменты get_/list_/info), потом действуй. "
+                   "Не больше 6 действий. В конце коротко расскажи, что сделала. Если инструмент вернул ошибку — "
+                   "объясни её простыми словами и не повторяй то же самое.")
+VISION_PERSONA = ("\n\nЯна показала тебе картинку или снимок экрана. Опиши, что видишь, и ответь на её вопрос. "
+                  "Если на экране ошибка — объясни её простыми словами и подскажи, что сделать.")
+CLOUD_PERSONA = ("Ты — Янка 🐑, тёплая помощница Яны. Отвечай по-русски, тепло, по делу, с лёгкими эмодзи. "
+                 "Сейчас ты отвечаешь через облачную модель.")
+
+
+def _strip_tag(text):
+    t = (text or "").strip()
+    low = t.lower()
+    for tag in TAGS:
+        if low.startswith(tag):
+            return t[len(tag):].strip()
+    return t
 
 
 class YankaService:
@@ -33,7 +53,7 @@ class YankaService:
         self.memory = Memory(data_dir)
         self.tasks = Tasks(data_dir)
         self.gate = Gate(data_dir, {
-            "call_tool": bridge.call_tool,
+            "call_tool": lambda n, a: bridge.call_tool_as(n, a, "Янка 🐑"),
             "ask": lambda t, m: bridge.ask_user(t, m),
             "list_backups": bridge.list_backups,
             "restore_backup": bridge.restore_backup,
@@ -45,15 +65,34 @@ class YankaService:
         # cozycode.py подставляет: to_klodik(pid, text) - сообщение Клодику; post(pid, text) - ответ Янки в чат
         self.hooks = {"to_klodik": None, "post": None}
         self._running = {}  # task_id -> threading.Event (стоп)
+        self.listener = voice.Listener(log)
+        self._import_keys(Path(data_dir) / "import_keys.json")
 
     # ---------- маршрут ----------
-    def route_message(self, text, mode):
+    def _import_keys(self, f):
+        """Ключи, которые Клодик положил для Яны: шифруем (DPAPI) и сразу удаляем открытый файл."""
+        if not f.exists():
+            return
+        try:
+            for p in json.loads(f.read_text(encoding="utf-8")).get("providers", []):
+                self.hub.store.upsert_provider(p["id"], key=p.get("key") or None,
+                                               **{k: p[k] for k in ("model", "enabled") if k in p})
+                self.log(f"Янка: добавлен провайдер {p['id']}")
+        except Exception as e:
+            self.log(f"Янка: ключи не импортировались ({e})")
+        finally:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+    def route_message(self, text, mode, images=False):
         """mode: off - всё Клодику (как раньше); auto - Янка решает; local - всегда Янка."""
         if mode == "off" and not text.lower().startswith(("@пк", "@local")):
             return None
         if mode == "local" and not text.startswith("@"):
             text = "@пк " + text
-        return self.router.route(text)
+        return self.router.route(text, images=images)
 
     # ---------- подготовка модели ----------
     def ensure_local(self):
@@ -76,11 +115,41 @@ class YankaService:
             return want
 
     # ---------- ответ ----------
-    def answer(self, pid, project_folder, text, history, decision, status=None):
-        """Ответ Янки. status(text) - показать статус в окне. Возвращает (текст, meta)."""
+    def _program_tools(self, program):
+        """Инструменты программы (Blender / Roblox Studio) в виде функций для модели."""
+        p = self.br.PROGRAMS.get(program)
+        out = []
+        for t in p.list_tools()[:40]:
+            out.append({"name": t["name"], "description": " ".join(str(t.get("description") or "").split())[:300],
+                        "parameters": t.get("inputSchema") or {"type": "object", "properties": {}}})
+        return p.name, out
+
+    def _answer_cloud(self, pid, text, decision, status, images):
+        """Облако: только сам вопрос, без памяти, истории и файлов Яны (личное наружу не уходит)."""
+        prov = decision["provider"]
+        status(f"☁️ Янка спрашивает {self.hub.store.provider(prov).get('name', prov)}…")
+        content = text or "Что на картинке?"
+        if images:
+            content = [{"type": "text", "text": content}] + [{"type": "image_url", "image_url": {"url": vision.data_url(i)}}
+                                                              for i in images]
+        r = self.hub.chat(prov, [{"role": "system", "content": CLOUD_PERSONA}, {"role": "user", "content": content}],
+                          model=decision.get("model"), max_tokens=1500, private=False, reason="ответ в чате (облако)")
+        reply = _strip_think(r["text"]) or "Облачная модель промолчала 🙈"
+        meta = {"who": "yanka", "model": r["model"], "provider": prov, "why": explain(decision), "tools": [],
+                "tokens": (r.get("in") or 0) + (r.get("out") or 0), "seconds": r.get("seconds", 0),
+                "usd": r.get("usd", 0), "cloud": True}
+        self.last[pid] = meta
+        return reply, meta
+
+    def answer(self, pid, project_folder, text, history, decision, status=None, images=None):
+        """Ответ Янки. status(text) - показать статус в окне. images - пути к картинкам. Возвращает (текст, meta)."""
         status = status or (lambda s: None)
-        text = text[3:].strip() if text.lower().startswith(("@пк", "@local")) else text
+        text = _strip_tag(text)
+        images = [i for i in (images or []) if vision.is_image(i)]
+        executor = decision.get("executor")
         try:
+            if executor == "cloud":
+                return self._answer_cloud(pid, text, decision, status, images)
             model = decision.get("model") or ""
             if not self.hub.check("lmstudio", timeout=2)["ok"] or not model:
                 status("🐑 Янка просыпается (запускаю модель на ПК)…")
@@ -102,13 +171,30 @@ class YankaService:
             for m in history[-10:]:
                 if m.get("role") in ("user", "assistant") and m.get("text"):
                     msgs.append({"role": m["role"], "content": str(m["text"])[:1500]})
-            msgs.append({"role": "user", "content": text})
-            tools = [t for t in self.gate.tools_for_model(self.br.TOOLS) if t["name"] in CHAT_TOOLS]
+            program = executor if executor in ("blender", "roblox") else None
+            if program:
+                status(f"🐑 Янка открывает {EXECUTORS[program]}…")
+                pname, tools = self._program_tools(program)
+                msgs[0]["content"] += PROGRAM_PERSONA.format(name=pname)
+            elif images:
+                tools = []
+                msgs[0]["content"] += VISION_PERSONA
+            else:
+                tools = [t for t in self.gate.tools_for_model(self.br.TOOLS) if t["name"] in CHAT_TOOLS]
+            if images:
+                status("👀 Янка смотрит на картинку…")
+                parts = [{"type": "text", "text": text or "Что ты видишь?"}]
+                parts += [{"type": "image_url", "image_url": {"url": vision.data_url(i)}} for i in images]
+                msgs.append({"role": "user", "content": parts})
+                used.append("👀 картинка")
+            else:
+                msgs.append({"role": "user", "content": text})
             total = {"in": 0, "out": 0, "seconds": 0.0}
             status("🐑 Янка думает…")
-            for _ in range(5):  # не больше 4 обращений к инструментам за ответ
-                r = self.hub.chat("lmstudio", msgs, model=model, max_tokens=900, tools=tools, private=True,
-                                  reason="ответ в чате")
+            rounds = 7 if program else 5
+            for _ in range(rounds):  # ограничение действий за один ответ
+                r = self.hub.chat("lmstudio", msgs, model=model, max_tokens=900, tools=tools or None, private=True,
+                                  reason="ответ в чате", timeout=300)
                 for k in total:
                     total[k] += r.get(k) or 0
                 if not r["tool_calls"]:
@@ -118,25 +204,39 @@ class YankaService:
                      "function": {"name": c["name"], "arguments": json.dumps(c["arguments"], ensure_ascii=False)}}
                     for i, c in enumerate(r["tool_calls"])]})
                 for i, c in enumerate(r["tool_calls"]):
-                    status(f"🐑 Янка смотрит: {c['name']}")
                     used.append(c["name"])
                     try:
-                        if c["name"] not in CHAT_TOOLS:
-                            raise Denied("в чате Янке доступно только чтение")
-                        res = self.gate.call(c["name"], c["arguments"], task_id=f"chat-{pid}", reason="ответ в чате")
+                        if program:
+                            status(f"🐑 Янка в {EXECUTORS[program]}: {c['name']}")
+                            res = self.gate.call("mcp_call", {"program": program, "tool": c["name"],
+                                                              "arguments": c["arguments"] or {}},
+                                                 task_id=f"chat-{pid}", reason=text[:150])
+                        else:
+                            status(f"🐑 Янка смотрит: {c['name']}")
+                            if c["name"] not in CHAT_TOOLS:
+                                raise Denied("в чате Янке доступно только чтение")
+                            res = self.gate.call(c["name"], c["arguments"], task_id=f"chat-{pid}", reason="ответ в чате")
                         out = "".join(x.get("text", "") for x in res.get("content", []) if x.get("type") == "text")
+                        if any(x.get("type") == "image" for x in res.get("content", [])):
+                            out += "\n(программа прислала снимок - он сохранён в mcp/…/images)"
                     except Denied as e:
                         out = f"Нельзя: {e}"
+                    except Exception as e:
+                        out = f"Ошибка: {type(e).__name__}: {e}"
                     msgs.append({"role": "tool", "tool_call_id": c["id"] or f"c{i}", "content": out[:6000]})
             reply = (r["text"] or "").strip()
             reply = _strip_think(reply) or "Ой, у меня не получилось придумать ответ 🙈 Попробуй сказать по-другому?"
-        except (ProviderError, RuntimeError) as e:
+        except (ProviderError, RuntimeError, ValueError) as e:
             self.log(f"Янка: {e}")
             return None, {"error": str(e)}
+        except Exception as e:  # программа не запустилась и т.п.
+            self.log(f"Янка: {type(e).__name__}: {e}")
+            return None, {"error": f"{type(e).__name__}: {e}"}
         meta = {"who": "yanka", "model": model, "why": explain(decision), "tools": used,
                 "tokens": total["in"] + total["out"], "seconds": round(total["seconds"], 1)}
         self.last[pid] = meta
-        self._maybe_remember(pid, msgs[1:] + [{"role": "assistant", "content": reply}], model)
+        if not images:
+            self._maybe_remember(pid, msgs[1:] + [{"role": "assistant", "content": reply}], model)
         return reply, meta
 
     def _maybe_remember(self, pid, msgs, model):
@@ -256,6 +356,19 @@ class YankaService:
             local.LMStudio().unload()
             self.local_report(refresh=True)
             return {"ok": True}
+        if path == "voice/status":
+            return voice.status()
+        if path == "listen/start":
+            st = voice.status()
+            if not st["ready"]:
+                raise ValueError("Голос ещё не готов: " + (st["error"] or "нет микрофона"))
+            return {"ok": self.listener.start(int(body.get("max_seconds") or 30))}
+        if path == "listen/stop":
+            self.listener.stop()
+            return {"ok": True}
+        if path == "listen/poll":
+            L = self.listener
+            return {"active": L.active, "partial": L.partial, "text": L.text, "error": L.error}
         if path == "provider/remove":
             if body["id"] == "lmstudio":
                 raise ValueError("LM Studio убирать нельзя - на нём работает Янка")

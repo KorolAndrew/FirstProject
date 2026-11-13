@@ -531,7 +531,41 @@ def yanka_to_klodik(pid, text):
     call_klodik(pid)
 
 
-def yanka_reply(pid, text, history, decision):
+def yanka_screen(pid, text):
+    """1.3.0: Яна нажала «📸» - снимок экрана для Янки. Только по кнопке, снимок сохраняется в files/screens."""
+    from yanka import vision
+    project = get_project(pid)
+    if not project:
+        raise ValueError("Нет такого проекта")
+    bump("status", project=pid, text="📸 Янка смотрит на экран")
+    hidden = False
+    try:
+        if nw.running():
+            nw.W["win"].hide()  # своё окно не должно закрывать то, что Яна хочет показать
+            hidden = True
+            time.sleep(0.45)
+        png = vision.capture_screen()
+    finally:
+        if hidden:
+            nw.show()
+    folder = project_dir(project) / "files" / "screens"
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / time.strftime("экран_%Y-%m-%d_%H-%M-%S.png")
+    target.write_bytes(png)
+    rel_path = br.rel(target)
+    with LOCK:
+        STATE["activity"].append({"time": datetime.datetime.now().strftime("%H:%M"), "emoji": "📸",
+                                  "text": f"Снимок экрана для Янки: {target.name}", "state": "ok", "detail": ""})
+    text = text or "Что у меня на экране? Если есть ошибка - объясни её."
+    decision = YANKA.route_message("@пк " + text, "local", images=True)
+    history = read_messages(pid, 20)
+    msg = append_message(pid, {"role": "user", "text": "📸 " + text, "files": [rel_path], "to": "yanka"})
+    bump("sent", project=pid)
+    threading.Thread(target=yanka_reply, args=(pid, text, history, decision, [str(target)]), daemon=True).start()
+    return {"ok": True, "message": msg, "path": rel_path}
+
+
+def yanka_reply(pid, text, history, decision, images=None):
     """1.3.0: ответ Янки в чат. Не вышло (LM Studio, модель) - передаём сообщение Клодику, как раньше."""
     project = get_project(pid) or {"folder": "."}
 
@@ -542,7 +576,7 @@ def yanka_reply(pid, text, history, decision):
         bump("status", project=pid, text=s[:200])
 
     try:
-        reply, meta = YANKA.answer(pid, str(project_dir(project)), text, history, decision, status)
+        reply, meta = YANKA.answer(pid, str(project_dir(project)), text, history, decision, status, images)
     except Exception as e:
         log(f"Янка: {type(e).__name__}: {e}")
         reply, meta = None, {"error": str(e)}
@@ -553,7 +587,8 @@ def yanka_reply(pid, text, history, decision):
         note = append_message(pid, {"role": "assistant", "who": "yanka", "text":
                                     f"🐑 Не получилось ответить самой ({meta.get('error', 'ошибка')}). Передала Клодику ✨"})
         (INBOX_DIR / f"{note['time'].replace(':', '-')}_{note['id']}.json").write_text(
-            json.dumps({"id": note["id"], "project": pid, "text": text, "files": [], "time": note["time"]},
+            json.dumps({"id": note["id"], "project": pid, "text": text,
+                        "files": [br.rel(Path(i)) for i in (images or [])], "time": note["time"]},
                        ensure_ascii=False), encoding="utf-8")
         bump("reply", project=pid, id=note["id"], preview=note["text"][:120])
         bridge_on("сообщение Клодику")
@@ -1313,16 +1348,19 @@ def api_post(path, body, raw=None, query=None):
             raise ValueError("Пустое сообщение")
         # 1.3.0: Янка отвечает сама (модель на ПК), если это разговор; код и файлы - по-прежнему Клодику
         decision = None
-        if YANKA and not files:
+        from yanka import vision
+        images = bool(files) and all(vision.is_image(f) for f in files)
+        if YANKA and (not files or images):
             try:
-                decision = YANKA.route_message(text, CFG.get("yanka_mode", "auto"))
+                decision = YANKA.route_message(text, CFG.get("yanka_mode", "auto"), images=images)
             except Exception as e:
                 log(f"Янка: маршрут не получился ({e})")
-        if decision and decision["executor"] == "local":
+        if decision and decision["executor"] in ("local", "cloud", "blender", "roblox"):
             history = read_messages(pid, 20)
-            msg = append_message(pid, {"role": "user", "text": text, "files": [], "to": "yanka"})
+            msg = append_message(pid, {"role": "user", "text": text, "files": files, "to": "yanka"})
             bump("sent", project=pid)
-            threading.Thread(target=yanka_reply, args=(pid, text, history, decision), daemon=True).start()
+            paths = [str(br.resolve_path(f)) for f in files] if images else []
+            threading.Thread(target=yanka_reply, args=(pid, text, history, decision, paths), daemon=True).start()
             return {"ok": True, "message": msg, "yanka": True}
         route = None
         if decision:
@@ -1441,6 +1479,8 @@ def api_post(path, body, raw=None, query=None):
         if not YANKA:
             raise ValueError("Янка не запустилась - посмотри data/cozycode.log")
         what = path[len("/api/yanka/"):]
+        if what == "screen":
+            return yanka_screen(body.get("project") or "general", (body.get("text") or "").strip())
         if what == "state":
             return YANKA.state(body.get("project"))
         if what == "local":

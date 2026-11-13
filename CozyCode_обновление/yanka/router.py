@@ -19,7 +19,8 @@ EXECUTORS = {
 }
 
 MANUAL = {"@пк": "local", "@local": "local", "@облако": "cloud", "@cloud": "cloud", "@клодик": "klodik",
-          "@klodik": "klodik", "@blender": "blender", "@блендер": "blender", "@roblox": "roblox", "@роблокс": "roblox"}
+          "@klodik": "klodik", "@blender": "blender", "@блендер": "blender", "@roblox": "roblox", "@роблокс": "roblox",
+          "@gemini": "cloud", "@гугл": "cloud", "@google": "cloud"}
 
 # (тип задачи, слова-признаки). Порядок важен: более узкое - выше.
 RULES = [
@@ -73,15 +74,21 @@ class Router:
         p = self.hub.store.provider("lmstudio")
         return bool(p and p.get("enabled", True) and self.hub.check("lmstudio", timeout=2)["ok"])
 
-    def _cloud(self):
-        """Первый облачный провайдер, который включён, с ключом и с остатком лимита."""
+    def _cloud(self, manual=False):
+        """Облачный провайдер: включён и с ключом. Платный - только при остатке лимита.
+        Бесплатный (free, напр. Gemini) - только когда Яна сама написала @облако/@gemini:
+        сам Янка туда ничего не отправляет."""
         left = self.hub.store.budget_left()
-        if left["day"] <= 0 or left["month"] <= 0:
-            return None
+        paid_ok = left["day"] > 0 and left["month"] > 0
         for p in self.hub.store.providers():
-            if not p.get("local") and p.get("enabled", True) and p.get("key"):
+            if p.get("local") or not p.get("enabled", True) or not p.get("key"):
+                continue
+            if paid_ok and not p.get("free"):
+                return p["id"]
+            if manual and p.get("free"):
                 return p["id"]
         return None
+
 
     def _programs(self):
         # только если Янка работает внутри CozyCode; сами bridge не импортируем (у него побочные эффекты)
@@ -92,7 +99,7 @@ class Router:
             return set()
 
     # --- решение ---
-    def route(self, text, private=False, programs=None):
+    def route(self, text, private=False, programs=None, images=False):
         t = (text or "").strip()
         first = t.split(maxsplit=1)[0].lower() if t else ""
         manual = MANUAL.get(first)
@@ -100,9 +107,11 @@ class Router:
         cx = complexity(t, kind)
         programs = self._programs() if programs is None else set(programs)
         local_ok = self._local_ok()
-        cloud = self._cloud()
+        cloud = self._cloud(manual=manual == "cloud")
 
-        if manual:
+        if images and manual not in ("cloud", "klodik"):
+            want, why = "local", "картинку посмотрю сама - модель на ПК умеет видеть, и снимок не уходит в интернет"
+        elif manual:
             want, why = manual, "ты выбрала сама"
         elif kind in ("blender", "roblox"):
             want, why = kind, f"задача про {EXECUTORS[kind]} - работаю прямо в программе"
@@ -125,6 +134,8 @@ class Router:
         if want == "cloud" and (not cloud or (private and not self.hub.store.cfg.get("cloud_private_ok"))):
             reason = "облачные модели выключены" if not cloud else "тут твои личные данные, в облако без разрешения не отправляю"
             d.update(executor="local" if local_ok else "klodik", fallback_from="cloud", reason=reason)
+        elif want in ("blender", "roblox") and not local_ok:
+            d.update(executor="klodik", fallback_from=want, reason="LM Studio не запущен - с программой поможет Клодик")
         elif want in ("blender", "roblox") and programs and want not in programs:
             d.update(executor="klodik", fallback_from=want, reason=f"{EXECUTORS[want]} не подключён в CozyCode - передаю Клодику")
         elif want == "local" and not local_ok:
@@ -133,7 +144,7 @@ class Router:
             else:
                 d.update(executor="klodik", fallback_from="local", reason="LM Studio не запущен - передаю Клодику")
 
-        if d["executor"] == "local":
+        if d["executor"] in ("local", "blender", "roblox"):  # в программах Янка работает той же моделью на ПК
             role = "code" if kind == "code" else ("fast" if cx < 0.15 and self.roles.get("fast") else "chat")
             d.update(provider="lmstudio", model=self.roles.get(role) or self.hub.store.provider("lmstudio").get("model"))
         elif d["executor"] == "cloud":

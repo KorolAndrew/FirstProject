@@ -24,6 +24,10 @@ TEMPLATES = {
                "local": False, "price_in": 2.5, "price_out": 10.0},
     "anthropic": {"name": "Anthropic", "kind": "anthropic", "base_url": "https://api.anthropic.com/v1",
                   "local": False, "price_in": 3.0, "price_out": 15.0},
+    # бесплатный уровень Gemini API (ключ из AI Studio): free=True - лимит расходов не нужен, но
+    # запросы бесплатного уровня Google может использовать для улучшения сервисов - личное туда не шлём
+    "google": {"name": "Google Gemini", "kind": "gemini", "model": "gemini-3.5-flash", "base_url": "https://generativelanguage.googleapis.com/v1beta",
+               "local": False, "free": True, "price_in": 0.0, "price_out": 0.0},
     "openrouter": {"name": "OpenRouter", "kind": "openai", "base_url": "https://openrouter.ai/api/v1",
                    "local": False, "price_in": 1.0, "price_out": 4.0},
 }
@@ -127,10 +131,11 @@ class Store:
                 if not base and not fields.get("base_url"):
                     raise ValueError(f"Неизвестный провайдер {pid}: нужен base_url")
                 p = {"id": pid, **(base or {"name": pid, "kind": "openai", "local": False, "price_in": 0.0,
-                                            "price_out": 0.0}), "enabled": True, "model": "", "key": ""}
+                                            "price_out": 0.0}), "enabled": True, "key": ""}
+                p.setdefault("model", "")
                 self.cfg["providers"].append(p)
             for k, v in fields.items():
-                if k in ("name", "kind", "base_url", "local", "price_in", "price_out", "enabled", "model"):
+                if k in ("name", "kind", "base_url", "local", "free", "price_in", "price_out", "enabled", "model"):
                     p[k] = v
             if key is not None:
                 p["key"] = seal(key.strip())

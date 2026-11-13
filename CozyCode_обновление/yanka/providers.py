@@ -132,7 +132,72 @@ class AnthropicAdapter:
                 "in": u.get("input_tokens"), "out": u.get("output_tokens"), "finish": r.get("stop_reason")}
 
 
-ADAPTERS = {"openai": OpenAIAdapter, "anthropic": AnthropicAdapter}
+class GeminiAdapter:
+    """Google Gemini по родному API. Ключи нового вида (AQ.…) не работают через OpenAI-совместимый
+    адрес как Bearer, поэтому ключ идёт в заголовке x-goog-api-key."""
+
+    def __init__(self, cfg, key):
+        self.cfg, self.key = cfg, key
+        self.base = cfg["base_url"].rstrip("/")
+
+    def _h(self):
+        return {"x-goog-api-key": self.key}
+
+    def models(self, timeout=5):
+        r = _http("GET", self.base + "/models?pageSize=200", self._h(), timeout=timeout, provider=self.cfg["id"])
+        return [m["name"].split("/", 1)[-1] for m in r.get("models", [])
+                if "generateContent" in (m.get("supportedGenerationMethods") or [])]
+
+    @staticmethod
+    def _parts(content):
+        if isinstance(content, str):
+            return [{"text": content}]
+        parts = []
+        for c in content or []:
+            if c.get("type") == "text":
+                parts.append({"text": c["text"]})
+            elif c.get("type") == "image_url":
+                url = c["image_url"]["url"]
+                head, _, data = url.partition(",")
+                parts.append({"inline_data": {"mime_type": head[5:].split(";")[0] or "image/png", "data": data}})
+        return parts
+
+    def chat(self, messages, model, max_tokens=1024, temperature=0.7, tools=None, timeout=180, reasoning=None):
+        system = "\n\n".join(m["content"] for m in messages if m["role"] == "system" and isinstance(m["content"], str))
+        contents = []
+        for m in messages:
+            if m["role"] in ("user", "assistant") and m.get("content"):
+                contents.append({"role": "model" if m["role"] == "assistant" else "user", "parts": self._parts(m["content"])})
+        body = {"contents": contents, "generationConfig": {"maxOutputTokens": max_tokens, "temperature": temperature}}
+        # «мысли» Gemini расходуют тот же лимит ответа - без этого ответ обрывается на первых словах
+        if "gemini-2" in model:
+            body["generationConfig"]["maxOutputTokens"] = max_tokens + 2048
+        elif "gemini" in model:
+            # minimal - быстрый ответ; запас +1024 на случай, если модель всё-таки «подумает»
+            body["generationConfig"]["thinkingConfig"] = {"thinkingLevel": reasoning if reasoning in ("low", "medium", "high") else "minimal"}
+            body["generationConfig"]["maxOutputTokens"] = max_tokens + 1024
+        if system:
+            body["systemInstruction"] = {"parts": [{"text": system}]}
+        if tools:
+            body["tools"] = [{"functionDeclarations": [{"name": t["name"], "description": t.get("description", ""),
+                                                        "parameters": t.get("parameters") or {"type": "object"}}
+                                                       for t in tools]}]
+        r = _http("POST", f"{self.base}/models/{model}:generateContent", self._h(), body, timeout, self.cfg["id"])
+        cands = r.get("candidates") or []
+        if not cands:
+            why = (r.get("promptFeedback") or {}).get("blockReason") or "пустой ответ"
+            raise ProviderError("bad_request", why, self.cfg["id"])
+        parts = (cands[0].get("content") or {}).get("parts") or []
+        text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+        calls = [{"id": None, "name": p["functionCall"]["name"], "arguments": p["functionCall"].get("args") or {}}
+                 for p in parts if p.get("functionCall")]
+        u = r.get("usageMetadata") or {}
+        return {"text": text, "tool_calls": calls, "model": r.get("modelVersion") or model,
+                "in": u.get("promptTokenCount"), "out": u.get("candidatesTokenCount"),
+                "finish": cands[0].get("finishReason")}
+
+
+ADAPTERS = {"openai": OpenAIAdapter, "anthropic": AnthropicAdapter, "gemini": GeminiAdapter}
 
 
 def _json_or_text(s):

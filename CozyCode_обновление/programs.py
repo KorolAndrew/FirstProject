@@ -268,7 +268,7 @@ class Program:
             self._stop_locked()
             if not self.cfg.get("approved"):
                 br.confirm_or_fail(f"Запустить «{self.name}»?",
-                                   f"Клодик хочет запустить MCP-сервер программы «{self.name}»:\n{describe(self.cfg)}\n\n"
+                                   f"{br.actor()} хочет запустить MCP-сервер программы «{self.name}»:\n{describe(self.cfg)}\n\n"
                                    "Так он сможет пользоваться её инструментами. Перед действиями (кроме просмотра) он спросит тебя.")
                 self.cfg["approved"] = True
                 save()
@@ -910,7 +910,7 @@ def setup(bridge):
             shown = json.dumps(arguments, ensure_ascii=False, indent=1)
             desc = " ".join(str(spec.get("description") or "").split())[:300]
             br.confirm_or_fail(f"{p.cfg.get('emoji') or '🧩'} {p.name}: {tool}",
-                               f"Клодик хочет выполнить в «{p.name}» действие «{tool}».\n{desc}\n\nПараметры:\n{shown[:1300]}",
+                               f"{br.actor()} хочет выполнить в «{p.name}» действие «{tool}».\n{desc}\n\nПараметры:\n{shown[:1300]}",
                                rule={"kind": "mcp", "prefix": tool, "folder": p.name, "program": p.id, "tool": tool})
         timeout = max(5, min(1800, int(timeout_seconds or p.cfg.get("timeout") or 300)))
         return result_content(p, tool, p.call(tool, arguments, timeout))
@@ -928,7 +928,7 @@ def setup(bridge):
         cfg = make_cfg(name=name, command=command, args=args, url=url, env=env, pid=id)
         if br.CONFIG.get("confirm_commands", True):
             br.confirm_or_fail(f"Подключить «{cfg['name']}»?",
-                               f"Клодик хочет подключить программу «{cfg['name']}» к CozyCode.\nЗапуск: {describe(cfg)}\n\n"
+                               f"{br.actor()} хочет подключить программу «{cfg['name']}» к CozyCode.\nЗапуск: {describe(cfg)}\n\n"
                                "CozyCode будет запускать её MCP-сервер и передавать Клодику её инструменты. "
                                "Перед действиями (кроме просмотра) Клодик будет спрашивать тебя.")
         cfg["approved"] = True

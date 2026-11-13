@@ -445,6 +445,22 @@ def decode_output(data):
 _confirm_lock = threading.Lock()
 
 
+_ACTOR = threading.local()
+
+
+def actor():
+    """1.3.0: кто сейчас действует - для текста подтверждений."""
+    return getattr(_ACTOR, "name", "Клодик")
+
+
+def call_tool_as(name, args, who):
+    _ACTOR.name = who
+    try:
+        return call_tool(name, args)
+    finally:
+        _ACTOR.name = "Клодик"
+
+
 def ask_user(title, message, rule=None, diff=None):
     message = message if len(message) <= 1800 else message[:1800] + "..."
     with _confirm_lock:

@@ -9,7 +9,9 @@
 .yn .m{display:none}
 .yn[data-mood=idle] .m-idle,.yn[data-mood=think] .m-think,.yn[data-mood=happy] .m-happy,.yn[data-mood=wow] .m-wow,
 .yn[data-mood=sad] .m-sad,.yn[data-mood=sleep] .m-sleep,.yn[data-mood=love] .m-love,.yn[data-mood=eat] .m-eat{display:inline}
-.yn[data-mood=idle] .m-open,.yn[data-mood=think] .m-open,.yn[data-mood=wow] .m-open{display:inline}
+.yn[data-mood=idle] .m-open,.yn[data-mood=think] .m-open,.yn[data-mood=wow] .m-open,.yn[data-mood=talk] .m-open,.yn[data-mood=talk] .m-talk{display:inline}
+.yn .talkmouth{animation:yn-talk .32s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes yn-talk{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
 .yn .all{transform-origin:120px 230px;animation:yn-breath 4.2s ease-in-out infinite}
 .yn[data-mood=happy] .all,.yn[data-mood=love] .all{animation:yn-bounce .9s ease-in-out infinite}
 .yn[data-mood=sleep] .all{animation:yn-breath 6s ease-in-out infinite}
@@ -105,6 +107,7 @@
   <path class="m m-idle m-think" d="M114 158q6 4 12 0" fill="none" stroke="#2a1f26" stroke-width="2.8" stroke-linecap="round"/>
   <path class="m m-happy m-love" d="M110 154q10 16 20 0z" fill="#d9566b" stroke="#2a1f26" stroke-width="2.8" stroke-linejoin="round"/>
   <ellipse class="m m-wow" cx="120" cy="159" rx="4.5" ry="6" fill="#d9566b" stroke="#2a1f26" stroke-width="2.8"/>
+  <g class="m m-talk"><ellipse class="talkmouth" cx="120" cy="158" rx="5.5" ry="5.5" fill="#d9566b" stroke="#2a1f26" stroke-width="2.8"/></g>
   <path class="m m-sad" d="M112 161q8-6 16 0" fill="none" stroke="#2a1f26" stroke-width="2.8" stroke-linecap="round"/>
   <ellipse class="m m-sleep" cx="120" cy="159" rx="2.8" ry="3.4" fill="#2a1f26"/>
   <g class="m m-eat"><ellipse class="chew" cx="120" cy="158" rx="6" ry="4.5" fill="#d9566b" stroke="#2a1f26" stroke-width="2.8"/></g>
@@ -131,7 +134,7 @@
   const MAP = {
     idle: "idle", setup: "idle", thinking: "think", queued: "think", sent: "think", picked: "think",
     done: "happy", confirm: "wow", error: "sad", offline: "sad", signal_error: "sad",
-    sleep: "sleep", love: "love", eat: "eat", happy: "happy", sad: "sad", think: "think", wow: "wow"
+    sleep: "sleep", love: "love", eat: "eat", talk: "talk", happy: "happy", sad: "sad", think: "think", wow: "wow"
   };
 
   function night() { const h = new Date().getHours(); return h >= 23 || h < 7; }

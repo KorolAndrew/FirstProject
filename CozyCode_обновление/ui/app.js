@@ -192,6 +192,7 @@
 
   async function loadMessages(force) {
     const {messages} = await api("/api/messages?project=" + encodeURIComponent(current));
+    if (V.pending) { const m = messages.find((x) => x.id === V.pending); if (m) { V.pending = null; V.speak(m.text); } }
     const confirms = S ? S.confirms : [];
     const key = current + "|" + messages.length + "|" + (messages.at(-1)?.id || "") + "|" + confirms.map((c) => c.id).join(",");
     if (key === msgsKey && !force) return;
@@ -224,10 +225,12 @@
     evs.filter((e) => e.n > lastEvent).forEach((e) => {
       if (e.type === "reply") {
         say("done"); ding();
+        if (e.who === "yanka" && V.get("speak")) V.pending = e.id;
         const p = S.projects.find((x) => x.id === e.project);
         notify((e.who === "yanka" ? "Янка ответила 🐑" : "Клодик закончил! ✨") + (p ? " (" + p.name + ")" : ""));
+        if (e.who !== "yanka" && V.get("notify")) V.speak("Клодик закончил" + (p ? ", проект " + p.name : ""));
         if (e.project !== current) { unread[e.project] = 1; localStorage.setItem("cozy-unread", JSON.stringify(unread)); }
-      } else if (e.type === "confirm") { say("confirm"); ding(); notify("Клодик спрашивает разрешения 🔔"); }
+      } else if (e.type === "confirm") { say("confirm"); ding(); notify("Клодик спрашивает разрешения 🔔"); if (V.get("notify")) V.speak("Нужно твоё разрешение"); }
       else if (e.type === "picked") say("thinking");
       else if (e.type === "signal") say("sent");
       else if (e.type === "queued") say("queued");
@@ -718,6 +721,94 @@
   $("pet-game").onclick = (e) => { if (e.target === $("pet-game")) closePet(); };
   window.addEventListener("message", (e) => { if (e.origin === location.origin && e.data && e.data.cozy === "close-pet") closePet(); });
 
+  // ---------- 1.3.0: голос ----------
+  const V = {
+    pending: null, utt: null,
+    prefs: Object.assign({speak: false, notify: false, autosend: true, voice: "", rate: 1.05, pitch: 1.1},
+                         JSON.parse(localStorage.getItem("cozy-voice") || "{}")),
+    get(k) { return this.prefs[k]; },
+    set(k, v) { this.prefs[k] = v; localStorage.setItem("cozy-voice", JSON.stringify(this.prefs)); },
+    voices() {
+      const all = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+      const ru = all.filter((v) => /^ru/i.test(v.lang));
+      return ru.length ? ru : all;
+    },
+    clean(t) {
+      return String(t || "").replace(/```[\s\S]*?```/g, " (код в чате) ").replace(/`([^`]*)`/g, "$1")
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[#*_>|~]/g, " ")
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "").replace(/\s+/g, " ").trim().slice(0, 1500);
+    },
+    speak(text) {
+      if (!window.speechSynthesis) return;
+      this.hush();
+      const t = this.clean(text); if (!t) return;
+      const u = new SpeechSynthesisUtterance(t);
+      const v = this.voices().find((x) => x.name === this.get("voice")) || this.voices()[0];
+      if (v) { u.voice = v; u.lang = v.lang; } else u.lang = "ru-RU";
+      u.rate = +this.get("rate") || 1; u.pitch = +this.get("pitch") || 1;
+      const y = $("yana");
+      u.onstart = () => { if (window.Yanochka) Yanochka.mood(y, "talk"); };
+      u.onend = u.onerror = () => { if (this.utt === u) { this.utt = null; if (window.Yanochka) Yanochka.mood(y, mood || "idle"); } };
+      this.utt = u;
+      speechSynthesis.speak(u);
+    },
+    hush() { if (window.speechSynthesis) speechSynthesis.cancel(); this.utt = null; },
+  };
+  if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => vFill();
+  function vFill() {
+    const sel = $("v-voice"), vs = V.voices();
+    sel.innerHTML = vs.map((v) => `<option value="${esc(v.name)}">${esc(v.name.replace(/^Microsoft /, ""))} (${esc(v.lang)})</option>`).join("") || "<option>голосов не нашла</option>";
+    if (V.get("voice")) sel.value = V.get("voice");
+    ["speak", "notify", "autosend"].forEach((k) => ($("v-" + k).checked = !!V.get(k)));
+    $("v-rate").value = V.get("rate"); $("v-rate-n").textContent = V.get("rate");
+    $("v-pitch").value = V.get("pitch"); $("v-pitch-n").textContent = V.get("pitch");
+  }
+  ["speak", "notify", "autosend"].forEach((k) => ($("v-" + k).onchange = (e) => V.set(k, e.target.checked)));
+  $("v-voice").onchange = (e) => V.set("voice", e.target.value);
+  $("v-rate").oninput = (e) => { V.set("rate", +e.target.value); $("v-rate-n").textContent = e.target.value; };
+  $("v-pitch").oninput = (e) => { V.set("pitch", +e.target.value); $("v-pitch-n").textContent = e.target.value; };
+  $("v-test").onclick = () => V.speak("Привет, Яна! Это мой голос. Нравится?");
+  $("v-hush").onclick = () => V.hush();
+  async function vStatus() {
+    try {
+      const s = await api("/api/yanka/voice/status", {});
+      $("v-status").innerHTML = s.ready ? `🟢 Слух готов · модель ${esc(s.model)} · микрофон: ${esc(s.mic || "?")}`
+        : `⚪ Слух не готов: ${esc(s.error || "нужно поставить")}${s.vosk ? "" : " (пакет vosk)"}`;
+      return s;
+    } catch (e) { $("v-status").textContent = "⚠️ " + e.message; return {ready: false, error: e.message}; }
+  }
+
+  const mic = {on: false, t: null};
+  async function micStart() {
+    V.hush();
+    try { await api("/api/yanka/listen/start", {max_seconds: 30}); }
+    catch (e) { toast(e.message, 6000); return; }
+    mic.on = true; $("btn-mic").classList.add("on"); $("live").classList.remove("hidden"); $("live-text").textContent = "🎙️ Микрофон включён - говори…";
+    if (window.Yanochka) Yanochka.mood($("yana"), "think");
+    const poll = async () => {
+      let r; try { r = await api("/api/yanka/listen/poll", {}); } catch (e) { r = {active: false, error: e.message}; }
+      if (r.partial) $("live-text").textContent = "🎙️ " + r.partial;
+      if (r.active) { mic.t = setTimeout(poll, 300); return; }
+      mic.on = false; $("btn-mic").classList.remove("on"); $("live").classList.add("hidden");
+      if (window.Yanochka) Yanochka.mood($("yana"), mood || "idle");
+      if (r.error) { toast("🎙️ " + r.error, 6000); return; }
+      if (!r.text) { toast("Ничего не расслышала 🙈 Попробуй ещё раз"); return; }
+      ta.value = (ta.value ? ta.value + " " : "") + r.text; autosize();
+      if (V.get("autosend")) send(); else ta.focus();
+    };
+    mic.t = setTimeout(poll, 300);
+  }
+  $("btn-mic").onclick = () => { if (mic.on) api("/api/yanka/listen/stop", {}).catch(() => {}); else if (V.utt) V.hush(); else micStart(); };
+  $("live-stop").onclick = () => api("/api/yanka/listen/stop", {}).catch(() => {});
+
+  $("btn-screen").onclick = async () => {
+    if (!confirm("Показать Янке экран? Сделаю один снимок (окно CozyCode на секунду спрячется). Снимок останется в папке проекта files/screens и не уйдёт в интернет.")) return;
+    const text = ta.value.trim(); ta.value = ""; autosize();
+    toast("📸 Снимаю экран…");
+    try { await api("/api/yanka/screen", {project: current, text}); await loadMessages(true); }
+    catch (e) { toast(e.message, 6000); ta.value = text; }
+  };
+
   // ---------- 1.3.0: Янка ----------
   const whoSel = $("who");
   whoSel.onchange = async () => {
@@ -734,6 +825,7 @@
     document.querySelectorAll(".ytab").forEach((x) => x.classList.toggle("on", x === t));
     document.querySelectorAll(".ypane").forEach((p) => p.classList.toggle("hidden", p.id !== t.dataset.y));
     if (t.dataset.y === "y-memory") yMemory();
+    if (t.dataset.y === "y-voice") { vFill(); vStatus(); }
   }));
   $("btn-yanka").onclick = async () => { $("m-yanka").classList.remove("hidden"); await yLoad(); };
   async function yLoad() {

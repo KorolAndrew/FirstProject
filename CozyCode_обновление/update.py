@@ -7,8 +7,9 @@ SRC = Path(__file__).resolve().parent
 FILES = ["bridge.py", "cozycode.py", "programs.py", "window.py", "README.txt", "ui/index.html", "ui/app.js", "ui/app.css",
          "ui/yanochka.js", "ui/tamagotchi.html",
          "yanka/__init__.py", "yanka/__main__.py", "yanka/store.py", "yanka/providers.py", "yanka/local.py", "yanka/router.py", "yanka/memory.py", "yanka/tasks.py", "yanka/permissions.py", "yanka/app.py",
+         "yanka/vision.py", "yanka/voice.py",
          "tests/test_yanka.py", "tests/test_router.py", "tests/test_memory.py",
-         "tests/test_tasks.py", "tests/test_permissions.py"]
+         "tests/test_tasks.py", "tests/test_permissions.py", "tests/test_next.py"]
 
 
 def desktop():
@@ -69,6 +70,11 @@ def main():
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
         print("  обновлён: " + f)
+    keys = SRC / "data" / "import_keys.json"  # 1.3.0: одноразовая передача ключа - CozyCode зашифрует и удалит
+    if keys.exists():
+        (app / "data").mkdir(parents=True, exist_ok=True)
+        shutil.move(str(keys), str(app / "data" / "import_keys.json"))
+        print("  ключ провайдера передан Янке (будет зашифрован при запуске)")
     print()
     print("  Готово! Старые файлы сохранены в " + str(old))
     print("  Запускаю CozyCode...")
