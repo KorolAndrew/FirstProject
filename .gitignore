@@ -1,0 +1,22 @@
+# Личные файлы и данные - не выкладываем (репозиторий публичный)
+data/
+backups/
+_preview/
+mcp/
+tmp/refs/
+files/*
+!files/янка_задание*.txt
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.blend
+*.blend1
+*.gguf
+*.b64
+*.b64.txt
+__pycache__/
+*.pyc
+config.json
+.context/
+.hoplite/

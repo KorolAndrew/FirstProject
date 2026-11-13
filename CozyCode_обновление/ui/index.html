@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="cozy-key" content="__COZY_KEY__">
+<title>CozyCode</title>
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#1f1c24">
+<style>html,body{background:#17151b}</style>
+<link rel="icon" href="/ui/img/favicon.png">
+<link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo">
+      <img src="/ui/img/avatar.png" alt="" class="pixel">
+      <div><div class="name">Cozy<span>Code</span></div><div class="sub">Клодик и Яночка</div></div>
+    </div>
+    <button class="btn new" id="btn-new">＋ Новый проект</button>
+    <div class="label">Проекты</div>
+    <nav id="projects"></nav>
+    <div class="grow"></div>
+    <div class="status" id="status">
+      <div><i class="dot" id="d-bridge"></i>Мост <b id="t-bridge">…</b> <button class="btn ghost small bridge-btn" id="btn-bridge" title="Мост и туннель нужны только Клодику (агенту Notion). Включаются сами, когда пишешь Клодику">🔌</button></div>
+      <div><i class="dot" id="d-tunnel"></i>Туннель <b id="t-tunnel">…</b></div>
+      <div><i class="dot" id="d-agent"></i>Клодик <b id="t-agent">…</b></div>
+      <div class="usage" id="t-usage" title="Запросы через ngrok в этом месяце (бесплатно 20 000)"></div>
+    </div>
+    <div class="side-btns">
+      <button class="btn ghost" id="btn-settings">⚙️ Настройки</button>
+      <button class="btn ghost icon" id="btn-quit" title="Выключить CozyCode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></button>
+    </div>
+  </aside>
+
+  <main class="chat" id="chat">
+    <header class="chat-head">
+      <div class="title"><span id="p-emoji">🐑</span> <span id="p-name">Общий</span> <small id="p-folder"></small></div>
+      <div class="head-btns">
+        <button class="btn ghost small hidden" id="btn-recall" title="Если Клодик долго не отвечает">🔔 Позвать ещё раз</button>
+        <button class="btn ghost small" id="btn-yanka" title="Янка: модели, память, задачи, журнал разрешений">🐑 Янка</button>
+        <button class="btn ghost small" id="btn-skills" title="Скилы - правила и знания для Клодика">🧠 Скилы</button>
+        <button class="btn ghost small" id="btn-memory" title="Память проекта (PROJECT.md)">📒 О проекте</button>
+        <button class="btn ghost small" id="btn-folder">📂 Папка</button>
+        <button class="btn ghost small" id="btn-pedit" title="Переименовать проект">✏️</button>
+      </div>
+    </header>
+    <div class="banner hidden" id="banner"></div>
+    <div class="banner moonbar hidden" id="moonbar">🌙 Клодик закончил. ПК выключится через <b id="moon-left">60</b> с <button class="btn small" id="moon-cancel">Отмена</button></div>
+    <div class="messages" id="messages"></div>
+    <div class="composer">
+      <div class="work hidden" id="work"><span class="dots"><i></i><i></i><i></i></span><span id="work-text"></span></div>
+      <div class="chips" id="chips"></div>
+      <div class="input">
+        <select id="who" class="who" title="Кто отвечает на сообщения">
+          <option value="auto">🐑✨ Авто</option>
+          <option value="local">🐑 Янка</option>
+          <option value="off">✨ Клодик</option>
+        </select>
+        <button class="btn ghost icon moon" id="btn-moon" title="Выключить ПК, когда Клодик закончит (через минуту, можно отменить)">🌙</button>
+        <button class="btn ghost icon" id="btn-attach" title="Прикрепить файл">📎</button>
+        <input type="file" id="file" multiple hidden>
+        <textarea id="text" rows="1" placeholder="Напиши Клодику…  (Enter - отправить, Shift+Enter - новая строка)"></textarea>
+        <button class="btn send" id="btn-send" title="Отправить"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
+      </div>
+    </div>
+    <div class="drop hidden" id="drop">Отпусти файл - Яночка положит его в папку проекта 🐑</div>
+  </main>
+
+  <aside class="right">
+    <div class="bubble" id="bubble">Привет, Яна! ✨</div>
+    <div class="yana" id="yana" title="Поиграть с Яночкой 🎮"><img src="/ui/img/yanochka.gif" alt="Яночка"></div>
+    <button class="btn ghost small play" id="btn-pet">🎮 Тамагочи с Яночкой</button>
+    <div class="label">Что делает Клодик</div>
+    <div class="activity" id="activity"></div>
+  </aside>
+</div>
+
+<div class="modal hidden" id="m-settings">
+  <div class="card">
+    <h2>⚙️ Настройки</h2>
+    <div class="tabs">
+      <button class="tab on" data-tab="t-conn">Подключение</button>
+      <button class="tab" data-tab="t-app">Приложение</button>
+      <button class="tab" data-tab="t-folders">📁 Папки</button>
+      <button class="tab" data-tab="t-programs">🧩 Программы</button>
+      <button class="tab" data-tab="t-backups">↩️ Откат</button>
+      <button class="tab" data-tab="t-guide">🔌 Переезд</button>
+    </div>
+    <section id="t-conn" class="pane">
+      <label>Туннель
+        <select id="s-tunnel"><option value="ngrok">ngrok - постоянный адрес</option><option value="cloudflare">Cloudflare - временный адрес</option><option value="off">Выключен</option></select>
+      </label>
+      <label>Адрес ngrok<input id="s-ngrok_domain" placeholder="что-то.ngrok-free.dev"></label>
+      <label>Адрес для Notion (настройки агента)<input id="s-mcp" readonly></label>
+      <div class="row"><button class="btn ghost small" data-copy="s-mcp">📋 Копировать адрес</button></div>
+      <label>Ключ доступа для Notion (вставлять без слова Bearer)<input id="s-mcptoken" type="password" readonly></label>
+      <div class="row"><button class="btn ghost small" id="btn-showkey">👁 Показать</button><button class="btn ghost small" data-copy="s-mcptoken">📋 Копировать ключ</button><span class="hint">Никому не показывай этот ключ.</span></div>
+      <label class="check"><input type="checkbox" id="s-confirm_commands"> Спрашивать перед командами</label>
+      <label class="check"><input type="checkbox" id="s-confirm_deletes"> Спрашивать перед удалением</label>
+      <label class="check"><input type="checkbox" id="s-confirm_edits"> Спрашивать перед изменением файлов (с показом, что поменяется)</label>
+      <p class="hint" id="s-workspace"></p>
+    </section>
+    <section id="t-app" class="pane hidden">
+      <label class="check"><input type="checkbox" id="s-sound"> Звоночек «дзынь», когда Клодик закончил</label>
+      <label class="check"><input type="checkbox" id="s-notifications"> Уведомления Windows от Яночки</label>
+      <label class="check"><input type="checkbox" id="s-native_window"> Своё окно CozyCode со значком у часов (без Edge, нужен pywebview; сработает после перезапуска)</label>
+      <label class="check"><input type="checkbox" id="s-bridge_autostart"> Включать мост и туннель для Клодика сразу при запуске (иначе - когда пишешь Клодику или по кнопке 🔌)</label>
+      <label class="check"><input type="checkbox" id="s-autostart"> Запускать CozyCode вместе с Windows</label>
+      <label>Сколько прошлых сообщений показывать Клодику<input type="number" id="s-history_messages" min="0" max="50"></label>
+      <p class="hint">Больше истории - Клодик лучше помнит разговор, но тратит чуть больше лимитов.</p>
+    </section>
+    <section id="t-folders" class="pane hidden">
+      <p class="hint">Кроме рабочей папки Клодик может работать только в этих папках. Системные папки Windows и сама папка CozyCode защищены всегда. То, что Клодик удаляет здесь, попадает в Корзину.</p>
+      <div id="folders" class="list"></div>
+      <p class="hint">Новая папка добавляется при создании проекта - кнопка «📁 Обзор…».</p>
+      <div class="label">⚡ Команды без вопросов</div>
+      <p class="hint">Сюда попадает то, что ты разрешила кнопкой «✅ Всегда … здесь». Удаление, цепочки команд и опасные программы так не разрешаются никогда.</p>
+      <div id="cmdrules" class="list"></div>
+    </section>
+    <section id="t-programs" class="pane hidden">
+      <p class="hint">Клодик может работать прямо в программах на ПК - Blender, Roblox Studio и других, у которых есть MCP-сервер. CozyCode сам запускает его и передаёт Клодику инструменты программы. Перед действиями (кроме просмотра) Клодик спрашивает тебя, а «✅ Всегда» запоминает инструмент.</p>
+      <div id="programs" class="list"></div>
+      <div class="row wrap"><button class="btn ghost small" data-padd="blender">➕ 🧊 Blender</button><button class="btn ghost small" data-padd="roblox">➕ 🧱 Roblox Studio</button></div>
+      <div class="label">Другая программа</div>
+      <label>Название<input id="p-name" placeholder="Например: Godot"></label>
+      <label>Команда запуска MCP-сервера или адрес<input id="p-cmd" placeholder="uvx blender-mcp  ·  &quot;C:\путь\server.exe&quot; --stdio  ·  http://127.0.0.1:3845/mcp"></label>
+      <div class="row"><button class="btn small" id="p-save">➕ Подключить</button><span class="hint">Команда есть в инструкции MCP-сервера программы (раздел для Claude Desktop или Cursor: command + args).</span></div>
+    </section>
+    <section id="t-backups" class="pane hidden">
+      <p class="hint">Перед тем как Клодик перезапишет, изменит или удалит файл в рабочей папке, CozyCode сохраняет копию (последние 300).</p>
+      <div id="backups" class="list"></div>
+    </section>
+    <section id="t-guide" class="pane hidden guide">
+      <p class="hint">Пошагово: как заново подключить Клодика, если ты сменила аккаунт Notion, создала нового агента или что-то отвалилось. Делай шаги по порядку. Сам CozyCode переустанавливать не нужно: переписка, проекты и файлы остаются на ПК.</p>
+
+      <h3>1. Проверь, что CozyCode и туннель работают</h3>
+      <ol>
+        <li>CozyCode запущен, внизу слева точка моста зелёная.</li>
+        <li>Вкладка «Подключение»: туннель <b>ngrok</b>, адрес <code><твой-адрес>.ngrok-free.dev</code>.</li>
+        <li>Если ngrok тоже новый (другой аккаунт ngrok): на dashboard.ngrok.com возьми <b>Authtoken</b> (длинный, НЕ тот, что начинается с <code>rd_</code>) и выполни в PowerShell в папке CozyCode: <code>.\ngrok config add-authtoken ТВОЙ_ТОКЕН</code>. Затем в Domains скопируй бесплатный адрес, впиши его сюда и перезапусти CozyCode.</li>
+      </ol>
+
+      <h3>2. Создай агента в новом аккаунте</h3>
+      <ol>
+        <li>В Notion слева: <b>Agents → Новый агент</b> (Custom Agent). Имя «Клодик», иконка 🐑.</li>
+        <li>Открой его <b>Instructions</b> и вставь текст из раздела «Инструкции для агента» в файле <code>AGENTS.md</code> (он лежит в папке NotionAgentWorkspace, открывается Блокнотом).</li>
+      </ol>
+
+      <h3>3. Подключи к агенту твой ПК</h3>
+      <ol>
+        <li>Настройки агента → <b>Tools / Инструменты → Добавить → Custom MCP server</b>.</li>
+        <li>Название: <code>Yana PC</code>. Адрес: кнопка «📋 Копировать адрес» на вкладке «Подключение» (он заканчивается на <code>/mcp</code>).</li>
+        <li>Авторизация: Bearer / API key. Вставь ключ из «📋 Копировать ключ». <b>Только сам ключ</b>, без слова Bearer, иначе будет ошибка 401.</li>
+        <li>Когда подключится, открой Yana PC в списке инструментов и <b>включи все инструменты</b>, особенно <code>cozy_get_inbox</code>, <code>cozy_status</code>, <code>cozy_reply</code>. Новые инструменты бывают выключены по умолчанию.</li>
+      </ol>
+
+      <h3>4. Чат с Клодиком</h3>
+      <ol>
+      </ol>
+      <!-- 1.2.3: база сигналов и ключ интеграции больше не нужны (у фоновых запусков отдельные лимиты) -->
+      <div hidden>
+      <h3>База сигналов</h3>
+      <ol>
+        <li>Создай в Notion базу (таблицу) <b>CozyCode · Сигналы</b>. Хватит одной колонки с названием.</li>
+        <li>В настройках агента дай ему доступ к этой базе (<b>Full access</b>).</li>
+        <li>В настройках агента → <b>Triggers / Триггеры → Добавить → «Страница добавлена в базу»</b> и выбери эту базу.</li>
+      </ol>
+
+      <h3>5. Ключ интеграции для CozyCode</h3>
+      <ol>
+        <li>Открой <code>notion.so/profile/integrations</code> → <b>Новая интеграция</b> → тип «Внутренняя», имя CozyCode, выбери нужное рабочее пространство.</li>
+        <li>Скопируй секретный ключ (начинается с <code>ntn_</code>).</li>
+        <li>Открой базу сигналов → <b>•••</b> справа сверху → <b>Подключения</b> → добавь CozyCode.</li>
+        <li>Вкладка «Notion» здесь: вставь ключ и ссылку на базу (база → ••• → Копировать ссылку), нажми «🔎 Проверить», потом «Сохранить».</li>
+      </ol>
+
+      </div>
+
+      <h3>5. Опубликуй и проверь</h3>
+      <ol>
+        <li>В настройках агента нажми <b>Опубликовать</b>: фоновые запуски видят только опубликованную версию.</li>
+        <li>Напиши Клодику в CozyCode «@клодик привет» (мост включится сам), потом в чате с агентом в Notion отправь точку «.».</li>
+        <li>Точка <b>«.»</b> в чате с агентом. Это значит «проверь CozyCode». В новом чате в первый раз лучше написать: «. = проверь CozyCode, правила в AGENTS.md».</li>
+      </ol>
+
+      <h3>Если что-то не так</h3>
+      <ul>
+        <li><b>401 / «The server didn't accept the token»</b>: ключ вставлен со словом Bearer или не тот. Вставь заново только ключ.</li>
+        <li><b>«Tool … is not enabled»</b>: у Yana PC включены не все инструменты (шаг 3.4).</li>
+        <li><b>Клодик молчит после «.»</b>: агент не опубликован или закончились кредиты.</li>
+        <li>Журнал ошибок: <code>CozyCode\data\cozycode.log</code>, его можно прислать Клодику.</li>
+      </ul>
+    </section>
+    <div class="row end">
+      <span id="s-note" class="hint"></span>
+      <button class="btn ghost" data-close>Отмена</button>
+      <button class="btn" id="btn-ssave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="m-project">
+  <div class="card small">
+    <h2 id="mp-title">✨ Новый проект</h2>
+    <div class="emojis" id="mp-emojis"></div>
+    <label>Название<input id="mp-name" maxlength="60" placeholder="Например: Игра про овечку"></label>
+    <div id="mp-folder-l">
+      <label>Папка проекта <span class="hint">(пусто - создам новую в рабочей папке)</span>
+        <span class="pick"><input id="mp-folder" placeholder="projects/… или C:\Users\…"><button class="btn ghost small" id="mp-browse" type="button">📁 Обзор…</button></span></label>
+      <label class="check hidden" id="mp-ro-l"><input type="checkbox" id="mp-ro"> Только смотреть - Клодик читает, но ничего не меняет</label>
+      <div class="hint" id="mp-folder-hint"></div>
+    </div>
+    <div class="row end">
+      <button class="btn ghost danger hidden" id="mp-remove">Убрать из списка</button>
+      <span class="grow"></span>
+      <button class="btn ghost" data-close>Отмена</button>
+      <button class="btn" id="mp-save">Создать</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="m-skills">
+  <div class="card wide">
+    <h2>🧠 Скилы <small id="sk-proj" class="hint"></small></h2>
+    <p class="hint">Скилы - это правила и знания для Клодика. Включённые он видит вместе с каждым сообщением и читает подходящие перед работой.</p>
+    <div class="row">
+      <button class="btn small" id="sk-ask">✨ Попросить Клодика сделать скил</button>
+      <button class="btn ghost small" id="sk-web">🌐 Найти в интернете</button>
+      <button class="btn ghost small" id="sk-new">✏️ Написать самой</button>
+    </div>
+    <div id="sk-edit" class="hidden">
+      <div class="row"><b id="sk-edit-title"></b><span class="grow"></span>
+        <label class="check hidden" id="sk-scope-l"><input type="checkbox" id="sk-scope"> только для этого проекта</label></div>
+      <textarea id="sk-text" class="code" rows="14" spellcheck="false"></textarea>
+      <div class="row"><button class="btn ghost small danger hidden" id="sk-del">🗑 Удалить</button><span class="grow"></span><button class="btn ghost small" id="sk-cancel">Отмена</button><button class="btn small" id="sk-save">Сохранить</button></div>
+    </div>
+    <div id="sk-list" class="list"></div>
+    <div class="row end"><button class="btn ghost" data-close>Закрыть</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="m-memory">
+  <div class="card wide">
+    <h2>📒 О проекте <small id="mm-path" class="hint"></small></h2>
+    <p class="hint">Это память проекта. Клодик читает её перед работой и дописывает после каждой задачи - так он ничего не забудет, даже после смены аккаунта.</p>
+    <textarea id="mm-text" class="code" rows="18" spellcheck="false"></textarea>
+    <div class="row end"><span id="mm-note" class="hint"></span><button class="btn ghost" data-close>Закрыть</button><button class="btn" id="mm-save">Сохранить</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="m-yanka">
+  <div class="card wide">
+    <h2>🐑 Янка <small class="hint" id="y-sub"></small></h2>
+    <div class="ytabs">
+      <button class="ytab on" data-y="y-models">🧠 Модели</button>
+      <button class="ytab" data-y="y-memory">💜 Память</button>
+      <button class="ytab" data-y="y-tasks">📋 Задачи</button>
+      <button class="ytab" data-y="y-journal">🛡️ Разрешения</button>
+    </div>
+    <section id="y-models" class="ypane">
+      <div class="ybox" id="y-res"></div>
+      <h3>Модели на ПК (LM Studio)</h3>
+      <div class="list" id="y-local"></div>
+      <div class="row"><button class="btn ghost small" id="y-refresh">🔄 Обновить</button><button class="btn ghost small" id="y-unload">⏏️ Выгрузить из видеокарты</button></div>
+      <h3>Провайдеры</h3>
+      <div class="list" id="y-prov"></div>
+      <p class="hint">Облачные модели платные. Пока лимит $0, Янка в облако не ходит. Ключи шифруются средствами Windows и в окне не показываются.</p>
+      <div class="row"><select id="y-pid"></select><input id="y-pmodel" placeholder="модель, например deepseek-chat"><input id="y-pkey" type="password" placeholder="API-ключ" autocomplete="off"><button class="btn small" id="y-padd">💾 Сохранить</button></div>
+      <div class="row"><span class="hint">Лимит, $ в день</span><input id="y-bday" type="number" min="0" step="0.1" style="max-width:90px"><span class="hint">в месяц</span><input id="y-bmonth" type="number" min="0" step="0.5" style="max-width:90px"><button class="btn ghost small" id="y-bsave">💾 Лимит</button></div>
+    </section>
+    <section id="y-memory" class="ypane hidden">
+      <div class="row"><input id="y-mq" placeholder="Поиск по памяти…"><button class="btn ghost small" id="y-mfind">🔎</button></div>
+      <div class="row"><select id="y-mkind"></select><input id="y-mtext" placeholder="Запомнить новое… (например: «Я люблю пастельные цвета»)"><button class="btn small" id="y-madd">💜 Запомнить</button></div>
+      <div class="list" id="y-mlist"></div>
+      <p class="hint">Янка сама выписывает важное из разговоров (предпочтения, решения, проблемы). Пароли и ключи не запоминает никогда.</p>
+    </section>
+    <section id="y-tasks" class="ypane hidden">
+      <div class="row"><input id="y-tgoal" placeholder="Большая задача… (например: «придумай и распиши план уютной комнаты для Roblox»)"><button class="btn small" id="y-tplan">🧠 Составить план</button></div>
+      <p class="hint">Янка разобьёт задачу на шаги, сделает свои, проверит результат и повторит, если не вышло. Шаги про код, файлы, Blender и Roblox уйдут Клодику - когда он сделает, нажми «✅ Готово».</p>
+      <div class="list" id="y-tlist"></div>
+    </section>
+    <section id="y-journal" class="ypane hidden">
+      <p class="hint">Что Янка делала на ПК и кто разрешил. Чтение - сразу; изменения - с резервной копией (можно вернуть); установка программ - только с твоего «да»; настройки Windows - запрещены.</p>
+      <div class="list" id="y-jlist"></div>
+    </section>
+    <div class="row end"><button class="btn ghost" data-close>Закрыть</button></div>
+  </div>
+</div>
+
+<div class="off hidden" id="off"><img src="/ui/img/chibi.png" alt=""><div>CozyCode выключен. До встречи, Яна! 💕</div><small>Окно можно закрыть.</small></div>
+<div class="modal hidden" id="m-diff">
+  <div class="card wide">
+    <h2>📝 Изменения <small id="md-path" class="hint"></small></h2>
+    <p class="hint"><span class="dm-k">красное</span> - убрано, <span class="dp-k">зелёное</span> - добавлено. Старая версия файла есть в ⚙️ Настройки → ↩️ Откат.</p>
+    <div id="md-body" class="diff big"></div>
+    <div class="row end"><button class="btn ghost" data-close>Закрыть</button></div>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+<div class="pet-game hidden" id="pet-game"><iframe id="pet-frame" title="Тамагочи с Яночкой"></iframe></div>
+<script src="/ui/yanochka.js"></script>
+<script>Yanochka.mood(document.getElementById("yana"), "idle");</script>
+<script src="/ui/app.js"></script>
+</body>
+</html>

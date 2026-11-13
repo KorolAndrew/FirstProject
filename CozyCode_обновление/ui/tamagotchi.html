@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Тамагочи с Яночкой</title>
+<meta name="color-scheme" content="dark">
+<style>
+:root{--bg:#17151b;--s1:#1f1c24;--s2:#28242e;--s3:#332e3a;--bd:#3a3442;--tx:#f3ede6;--mu:#a59cab;--pk:#f2a7c3;--gd:#e9c46a;--bl:#8db8e6;--gr:#8fd19e;--rd:#ef8a8a}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:14px/1.45 "Segoe UI",system-ui,sans-serif;user-select:none}
+.wrap{height:100%;display:grid;grid-template-columns:1fr 300px;gap:16px;padding:18px}
+.room{position:relative;border-radius:24px;overflow:hidden;border:3px solid var(--pk);
+  background:linear-gradient(#fff4ea 0 68%,#e8d2c4 68% 100%);transition:filter .6s}
+.room.night{filter:brightness(.45) saturate(.7)}
+.window{position:absolute;left:7%;top:8%;width:22%;aspect-ratio:1;border-radius:14px;border:6px solid #e6cbbd;
+  background:linear-gradient(160deg,#bfe0ff,#fff3c9)}
+.room.night .window{background:linear-gradient(160deg,#1b2346,#3a2f5c)}
+.window:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 47%,#e6cbbd 47% 53%,transparent 53%),linear-gradient(transparent 47%,#e6cbbd 47% 53%,transparent 53%)}
+.moon{position:absolute;right:18%;top:16%;width:26%;aspect-ratio:1;border-radius:50%;box-shadow:-8px 4px 0 0 #ffe7a3;opacity:0;transition:opacity .6s}
+.room.night .moon{opacity:1}
+.rug{position:absolute;left:50%;bottom:5%;width:56%;height:13%;transform:translateX(-50%);border-radius:50%;background:#f2a7c3;opacity:.55}
+.pet{position:absolute;left:50%;bottom:8%;width:min(46%,340px);transform:translateX(-50%);cursor:pointer;transition:transform .2s}
+.pet:active{transform:translateX(-50%) scale(.97)}
+.pet svg{display:block;width:100%}
+.bubble{position:absolute;left:50%;top:6%;transform:translateX(-50%);max-width:70%;background:#fff;color:#2a1f26;border-radius:18px;
+  padding:10px 14px;font-weight:700;text-align:center;box-shadow:0 4px 0 rgba(0,0,0,.08)}
+.bubble.pop{animation:pop .35s}
+@keyframes pop{0%{transform:translateX(-50%) scale(.9)}60%{transform:translateX(-50%) scale(1.05)}100%{transform:translateX(-50%) scale(1)}}
+.fx{position:absolute;pointer-events:none;font-size:26px;animation:fly 1.4s ease-out forwards}
+@keyframes fly{0%{transform:translateY(0) scale(.6);opacity:0}20%{opacity:1}100%{transform:translateY(-110px) scale(1.2);opacity:0}}
+.food{position:absolute;font-size:44px;left:50%;bottom:36%;transform:translateX(-50%);animation:food 1.6s ease-in forwards}
+@keyframes food{0%{transform:translate(-50%,-140px);opacity:0}30%{transform:translate(-50%,0);opacity:1}80%{opacity:1}100%{transform:translate(-50%,0) scale(.2);opacity:0}}
+.side{display:flex;flex-direction:column;gap:12px;min-height:0}
+h1{margin:0;font-size:20px}h1 span{color:var(--pk)}
+.sub{color:var(--mu);font-size:12.5px;margin-top:-8px}
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:12px}
+.stat{display:grid;grid-template-columns:26px 1fr 34px;align-items:center;gap:8px;margin:7px 0}
+.bar{height:12px;border-radius:8px;background:var(--s3);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:8px;background:var(--gr);transition:width .5s,background .5s}
+.bar i.mid{background:var(--gd)}.bar i.low{background:var(--rd)}
+.num{color:var(--mu);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.lvl{display:flex;justify-content:space-between;color:var(--mu);font-size:12.5px}
+.xp{height:8px;border-radius:6px;background:var(--s3);overflow:hidden;margin-top:6px}.xp i{display:block;height:100%;background:var(--pk);transition:width .5s}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{font:inherit;color:var(--tx);background:var(--s2);border:1px solid var(--bd);border-radius:12px;padding:10px 8px;cursor:pointer;font-weight:600}
+button:hover{background:var(--s3);border-color:var(--pk)}
+button:disabled{opacity:.45;cursor:default;border-color:var(--bd)}
+.menu{display:none;gap:6px;margin-top:8px}.menu.on{display:flex}.menu button{flex:1;font-size:22px;padding:6px}
+.close{flex:none}
+.log{color:var(--mu);font-size:12.5px;flex:1;overflow:auto;min-height:40px}
+/* мини-игра «Поймай пылинки» */
+.game{position:absolute;inset:0;display:none;cursor:crosshair}
+.game.on{display:block}
+.game .hud{position:absolute;left:12px;top:10px;background:rgba(31,28,36,.85);color:var(--tx);padding:6px 12px;border-radius:12px;font-weight:700}
+.dust{position:absolute;width:38px;height:38px;margin:-19px;display:grid;place-items:center;font-size:26px;cursor:pointer;animation:spin 2s linear infinite}
+.dust.bad{filter:grayscale(1) brightness(.6)}
+@keyframes spin{to{rotate:360deg}}
+.beam{position:absolute;left:30%;top:0;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,243,201,.55),transparent);pointer-events:none}
+@media (max-width:760px){.wrap{grid-template-columns:1fr;grid-template-rows:1fr auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="room" id="room">
+    <div class="window"><div class="moon"></div></div>
+    <div class="rug"></div>
+    <div class="bubble" id="bubble">Привет! Поиграешь со мной? 🐑</div>
+    <div class="pet" id="pet" title="Погладить"></div>
+    <div class="game" id="game"><div class="beam"></div><div class="hud" id="hud"></div></div>
+  </div>
+  <div class="side">
+    <div><h1>Тамагочи с <span>Яночкой</span></h1><div class="sub" id="age"></div></div>
+    <div class="card">
+      <div class="stat"><span>🍓</span><div class="bar"><i id="b-food"></i></div><span class="num" id="n-food"></span></div>
+      <div class="stat"><span>💖</span><div class="bar"><i id="b-joy"></i></div><span class="num" id="n-joy"></span></div>
+      <div class="stat"><span>⚡</span><div class="bar"><i id="b-energy"></i></div><span class="num" id="n-energy"></span></div>
+      <div class="stat"><span>🫧</span><div class="bar"><i id="b-clean"></i></div><span class="num" id="n-clean"></span></div>
+    </div>
+    <div class="card">
+      <div class="lvl"><b id="lvl"></b><span id="lvl-next"></span></div>
+      <div class="xp"><i id="xp"></i></div>
+    </div>
+    <div class="acts">
+      <button id="a-feed">🍓 Покормить</button>
+      <button id="a-play">✨ Поиграть</button>
+      <button id="a-wash">🫧 Помыть</button>
+      <button id="a-sleep">🌙 Уложить спать</button>
+    </div>
+    <div class="menu" id="menu">
+      <button data-food="berry" title="Клубничка">🍓</button>
+      <button data-food="cake" title="Тортик">🍰</button>
+      <button data-food="tea" title="Чай">🍵</button>
+      <button data-food="candy" title="Конфетка">🍬</button>
+    </div>
+    <div class="log" id="log"></div>
+    <button class="close" id="close" title="Закрыть (Esc)">✖ Закрыть</button>
+  </div>
+</div>
+<script src="/ui/yanochka.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const KEY = "yana-pet-v1";
+  const HOUR = 3600e3;
+  // сколько уходит в час (сон восстанавливает энергию)
+  const DECAY = {food: 7, joy: 5, energy: 4, clean: 3};
+  const FOODS = {
+    berry: {emoji: "🍓", food: 18, joy: 6, say: "Ням! Клубничка - моя любимая 🍓"},
+    cake: {emoji: "🍰", food: 30, joy: 10, clean: -6, say: "Тортик!! Ой, я немножко испачкалась 🙈"},
+    tea: {emoji: "🍵", food: 8, joy: 8, energy: 8, say: "Тёплый чай - уютно-уютно ☕"},
+    candy: {emoji: "🍬", food: 6, joy: 16, energy: 6, say: "Сладенькое! Теперь я быстрая ✨"}
+  };
+  const clamp = (v) => Math.max(0, Math.min(100, v));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+  let P = load();
+  function load() {
+    try { const p = JSON.parse(localStorage.getItem(KEY)); if (p && p.t) return p; } catch (e) { /* новая */ }
+    return {food: 80, joy: 80, energy: 80, clean: 80, xp: 0, born: Date.now(), t: Date.now(), sleeping: false};
+  }
+  function save() { localStorage.setItem(KEY, JSON.stringify(P)); }
+
+  // время идёт и без открытого окна, но не дальше двух суток - Яночка не «пропадает»
+  function tick() {
+    const now = Date.now(), h = Math.min(48, (now - P.t) / HOUR);
+    P.t = now;
+    if (h <= 0) return;
+    P.food = clamp(P.food - DECAY.food * h * (P.sleeping ? 0.5 : 1));
+    P.joy = clamp(P.joy - DECAY.joy * h * (P.sleeping ? 0.3 : 1));
+    P.clean = clamp(P.clean - DECAY.clean * h);
+    P.energy = clamp(P.energy + (P.sleeping ? 14 : -DECAY.energy) * h);
+    if (P.sleeping && P.energy >= 100) { P.sleeping = false; log("Яночка выспалась и проснулась ☀️"); }
+    save();
+  }
+
+  const level = () => Math.floor(Math.sqrt(P.xp / 20)) + 1;
+  const xpFor = (l) => 20 * (l - 1) * (l - 1);
+  const TITLES = ["Новые знакомые", "Приятели", "Подружки", "Лучшие подружки", "Не разлей вода", "Родные души"];
+
+  function gain(xp) {
+    const before = level();
+    P.xp += xp;
+    if (level() > before) { say(`Ура! Уровень дружбы ${level()} 💖`, "love"); burst("💖", 5); }
+  }
+
+  let lock = 0, tmr;
+  function say(text, face, ms = 2600) {
+    const b = $("bubble");
+    b.textContent = text; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
+    if (face) { lock = Date.now() + ms; Yanochka.mood($("pet"), face); clearTimeout(tmr); tmr = setTimeout(render, ms); }
+  }
+  function log(text) {
+    const d = document.createElement("div");
+    d.textContent = new Date().toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"}) + " · " + text;
+    $("log").prepend(d);
+    while ($("log").children.length > 30) $("log").lastChild.remove();
+  }
+  function burst(ch, n = 3) {
+    const r = $("pet").getBoundingClientRect(), room = $("room").getBoundingClientRect();
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement("div");
+      s.className = "fx"; s.textContent = ch;
+      s.style.left = (r.left - room.left + r.width * (0.2 + Math.random() * 0.6)) + "px";
+      s.style.top = (r.top - room.top + r.height * (0.15 + Math.random() * 0.3)) + "px";
+      s.style.animationDelay = (i * 0.15) + "s";
+      $("room").appendChild(s); setTimeout(() => s.remove(), 1800 + i * 150);
+    }
+  }
+
+  function face() {
+    if (P.sleeping) return "sleep";
+    const low = Math.min(P.food, P.joy, P.energy, P.clean);
+    if (low < 20) return "sad";
+    if (P.energy < 30) return "sleep";
+    if (P.joy > 75 && P.food > 50) return "happy";
+    return "idle";
+  }
+  function wish() {
+    if (P.sleeping) return "Zzz… 💤";
+    const w = [];
+    if (P.food < 35) w.push("Я проголодалась… 🍓");
+    if (P.energy < 30) w.push("Глазки слипаются… уложишь меня? 🌙");
+    if (P.clean < 30) w.push("Хочу в ванну с пузыриками 🫧");
+    if (P.joy < 35) w.push("Мне скучно… поиграем? ✨");
+    if (w.length) return pick(w);
+    return pick(["Мне так хорошо с тобой 💕", "Погладишь меня? 🐑", "Сегодня уютный день ✨", "Ты лучшая, Яна! 💌", "Мур… то есть, бе-е 🐑"]);
+  }
+
+  function bar(id, v) {
+    const i = $("b-" + id); i.style.width = v + "%";
+    i.className = v < 25 ? "low" : v < 55 ? "mid" : "";
+    $("n-" + id).textContent = Math.round(v);
+  }
+  function render() {
+    ["food", "joy", "energy", "clean"].forEach((k) => bar(k, P[k]));
+    const l = level(), a = xpFor(l), b = xpFor(l + 1);
+    $("lvl").textContent = `💞 Дружба ${l}: ${TITLES[Math.min(l - 1, TITLES.length - 1)]}`;
+    $("lvl-next").textContent = `${P.xp - a}/${b - a}`;
+    $("xp").style.width = ((P.xp - a) / (b - a) * 100) + "%";
+    const days = Math.floor((Date.now() - P.born) / 864e5);
+    $("age").textContent = days ? `Вместе уже ${days} ${plural(days, "день", "дня", "дней")} 🐑` : "Вы только познакомились 🐑";
+    $("room").classList.toggle("night", P.sleeping);
+    $("a-sleep").textContent = P.sleeping ? "☀️ Разбудить" : "🌙 Уложить спать";
+    ["a-feed", "a-play", "a-wash"].forEach((id) => { $(id).disabled = P.sleeping || playing; });
+    if (Date.now() > lock) Yanochka.mood($("pet"), face());
+  }
+  function plural(n, a, b, c) { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c; }
+
+  // ---------- действия ----------
+  $("a-feed").onclick = () => $("menu").classList.toggle("on");
+  $("menu").onclick = (e) => {
+    const f = FOODS[e.target.dataset.food]; if (!f) return;
+    $("menu").classList.remove("on");
+    if (P.food >= 95) { say("Я уже наелась, спасибо 🥰", "happy"); return; }
+    tick();
+    const el = document.createElement("div"); el.className = "food"; el.textContent = f.emoji;
+    $("room").appendChild(el); setTimeout(() => el.remove(), 1700);
+    setTimeout(() => {
+      P.food = clamp(P.food + f.food); P.joy = clamp(P.joy + (f.joy || 0));
+      P.energy = clamp(P.energy + (f.energy || 0)); P.clean = clamp(P.clean + (f.clean || 0));
+      gain(3); save(); say(f.say, "eat", 2200); log("Покормила: " + f.emoji); render();
+    }, 500);
+  };
+  $("a-wash").onclick = () => {
+    tick();
+    P.clean = 100; P.joy = clamp(P.joy + 5); gain(3); save();
+    say("Пузырики! Я чистенькая и пушистая 🫧", "happy"); burst("🫧", 7); log("Помыла Яночку 🫧"); render();
+  };
+  $("a-sleep").onclick = () => {
+    tick();
+    P.sleeping = !P.sleeping; save();
+    if (P.sleeping) { say("Спокойной ночи… 💤", "sleep"); log("Уложила спать 🌙"); }
+    else { say(P.energy > 70 ? "Доброе утро! ☀️" : "Ой… я ещё сонная 🥱", P.energy > 70 ? "happy" : "sad"); gain(1); log("Разбудила ☀️"); }
+    render();
+  };
+  let pets = 0, petT = 0;
+  $("pet").onclick = () => {
+    if (playing) return;
+    tick();
+    if (P.sleeping) { say("Zzz… (улыбается во сне) 💤"); return; }
+    const now = Date.now(); pets = now - petT < 4000 ? pets + 1 : 1; petT = now;
+    P.joy = clamp(P.joy + (pets > 6 ? 0 : 3));
+    if (pets === 1 || pets % 3 === 0) gain(1);
+    save(); burst("💗", 2);
+    say(pets > 6 ? "Хи-хи, щекотно! 😆" : pick(["Мрр 💕", "Ещё-ещё! 🐑", "Обожаю, когда гладят 💖", "Ты тёплая ✨"]), "love", 1600);
+    render();
+  };
+
+  // ---------- мини-игра «Поймай пылинки в луче света» ----------
+  let playing = false;
+  $("a-play").onclick = () => {
+    tick();
+    if (P.energy < 12) { say("Я слишком устала… давай я посплю? 🥱", "sad"); return; }
+    startGame();
+  };
+  function startGame() {
+    playing = true; render();
+    const g = $("game"), room = $("room");
+    g.classList.add("on"); $("pet").style.opacity = ".35";
+    let score = 0, missed = 0, left = 20;
+    const hud = () => { $("hud").textContent = `✨ ${score}   ⏳ ${left} с` + (missed ? `   💨 ${missed}` : ""); };
+    hud(); say("Лови пылинки в луче света! ✨ Серые не трогай", "wow", 2500);
+    const spawn = setInterval(() => {
+      const bad = Math.random() < 0.18;
+      const d = document.createElement("div");
+      d.className = "dust" + (bad ? " bad" : ""); d.textContent = bad ? "☁️" : pick(["✨", "⭐", "💫"]);
+      const W = room.clientWidth, H = room.clientHeight;
+      let x = W * (0.3 + Math.random() * 0.4), y = -20;
+      const vx = (Math.random() - 0.5) * 0.6, vy = 0.9 + Math.random() * 1.1 + (20 - left) * 0.04;
+      d.style.left = x + "px"; d.style.top = y + "px"; g.appendChild(d);
+      const step = () => {
+        if (!d.isConnected) return;
+        x += vx + Math.sin(y / 30) * 0.6; y += vy;
+        d.style.left = x + "px"; d.style.top = y + "px";
+        if (y > H + 20) { d.remove(); if (!bad) { missed++; hud(); } return; }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+      d.onpointerdown = (e) => {
+        e.stopPropagation(); d.remove();
+        if (bad) { score = Math.max(0, score - 2); say("Апчхи! Это была пыль 🤧", "sad", 900); }
+        else { score++; if (score % 5 === 0) say(pick(["Здорово! ✨", "Ещё! ⭐", "Ты супер! 💫"]), "happy", 900); }
+        hud();
+      };
+    }, 520);
+    const clock = setInterval(() => {
+      left--; hud();
+      if (left > 0) return;
+      clearInterval(clock); clearInterval(spawn);
+      g.querySelectorAll(".dust").forEach((d) => d.remove());
+      g.classList.remove("on"); $("pet").style.opacity = "";
+      playing = false;
+      const best = Math.max(P.best || 0, score);
+      const record = score > (P.best || 0) && score > 0;
+      P.best = best;
+      P.joy = clamp(P.joy + 10 + score * 1.5); P.energy = clamp(P.energy - 12); P.food = clamp(P.food - 4);
+      gain(4 + Math.floor(score / 3)); save();
+      say(record ? `Рекорд: ${score} пылинок! 🏆` : `Поймали ${score} ✨ Рекорд: ${best}`, "happy", 3000);
+      burst("✨", 5); log(`Игра: ${score} пылинок`); render();
+    }, 1000);
+  }
+
+  // ---------- закрыть ----------
+  function close() {
+    if (window.parent !== window) window.parent.postMessage({cozy: "close-pet"}, "*");
+    else window.close();
+  }
+  $("close").onclick = close;
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  Yanochka.mount($("pet"));
+  tick(); render();
+  say(wish());
+  setInterval(() => { tick(); render(); }, 30000);
+  setInterval(() => { if (!playing && Date.now() > lock) say(wish()); }, 20000);
+})();
+</script>
+</body>
+</html>
